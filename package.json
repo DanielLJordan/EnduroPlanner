@@ -1,6 +1,7 @@
 {
-  "name": "stint-manager",
+  "name": "enduro-planner",
   "version": "1.0.0",
+  "description": "iRacing endurance race management — stints, pit stops, fuel planning, live telemetry",
   "private": true,
   "scripts": {
     "dev": "vite",
