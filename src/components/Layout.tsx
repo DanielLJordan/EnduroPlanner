@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Outlet, useParams } from 'react-router-dom'
+import { UserButton } from '@clerk/clerk-react'
 import NavBar from './NavBar'
 import useRaceStore from '../store/useRaceStore'
 
@@ -25,14 +26,23 @@ export default function Layout() {
       <aside className="w-52 flex-shrink-0 flex flex-col bg-gray-900 border-r border-gray-800/80">
         {/* App brand */}
         <div className="px-4 pt-4 pb-3 border-b border-gray-800">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 bg-blue-600 rounded-md flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-white">
-                <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 14a6 6 0 110-12 6 6 0 010 12z" opacity=".3"/>
-                <path d="M10 4.5a.5.5 0 01.5.5v4.793l2.854 2.853a.5.5 0 01-.708.708l-3-3A.5.5 0 019.5 10V5a.5.5 0 01.5-.5z"/>
-              </svg>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-blue-600 rounded-md flex items-center justify-center flex-shrink-0">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-white">
+                  <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 14a6 6 0 110-12 6 6 0 010 12z" opacity=".3"/>
+                  <path d="M10 4.5a.5.5 0 01.5.5v4.793l2.854 2.853a.5.5 0 01-.708.708l-3-3A.5.5 0 019.5 10V5a.5.5 0 01.5-.5z"/>
+                </svg>
+              </div>
+              <span className="text-xs font-bold text-gray-300 tracking-widest uppercase">EnduroPlanner</span>
             </div>
-            <span className="text-xs font-bold text-gray-300 tracking-widest uppercase">Stint Mgr</span>
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: 'w-6 h-6',
+                },
+              }}
+            />
           </div>
 
           {/* Race info */}

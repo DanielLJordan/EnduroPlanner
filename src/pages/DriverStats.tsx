@@ -367,14 +367,12 @@ export default function DriverStats() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/60">
-                {race.drivers.map((driver) => {
+                {(() => {
+                  const avgTimes = race.drivers.filter((d) => d.telemetry).map((d) => d.telemetry!.avgLapTimeSeconds)
+                  const fastestAvg = avgTimes.length > 0 ? Math.min(...avgTimes) : Infinity
+                  return race.drivers.map((driver) => {
                   const t = driver.telemetry
                   const best = t ? [...t.laps].sort((a, b) => a.lapTimeSeconds - b.lapTimeSeconds)[0] : null
-
-                  // Find fastest avg lap for highlighting
-                  const fastestAvg = Math.min(
-                    ...race.drivers.filter((d) => d.telemetry).map((d) => d.telemetry!.avgLapTimeSeconds)
-                  )
 
                   return (
                     <tr key={driver.id} className="hover:bg-gray-800/30 transition-colors">
@@ -424,7 +422,7 @@ export default function DriverStats() {
                       )}
                     </tr>
                   )
-                })}
+                })})()}
               </tbody>
               {race.drivers.filter((d) => d.telemetry).length > 1 && (
                 <tfoot>
