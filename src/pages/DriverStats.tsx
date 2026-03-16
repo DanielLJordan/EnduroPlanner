@@ -151,8 +151,6 @@ export default function DriverStats() {
             fairLabelColor = 'text-green-400'
           }
 
-          const availFrom = driver.availableFromMinute ?? 0
-          const availTo = Math.min(driver.availableToMinute ?? 9999, totalMinutes)
           const stripeStyle =
             'repeating-linear-gradient(45deg, rgba(0,0,0,0.5), rgba(0,0,0,0.5) 3px, transparent 3px, transparent 6px)'
 
@@ -231,6 +229,11 @@ export default function DriverStats() {
                 </div>
                 <div className="text-xs text-gray-500">
                   {(driver.minStintMinutes / 60).toFixed(driver.minStintMinutes % 60 === 0 ? 0 : 1)}h – {(driver.maxStintMinutes / 60).toFixed(driver.maxStintMinutes % 60 === 0 ? 0 : 1)}h
+                  {driver.timezoneOffset !== undefined && (
+                    <span className="ml-2 text-gray-600">
+                      GMT{(driver.timezoneOffset ?? 0) >= 0 ? '+' : ''}{driver.timezoneOffset ?? 0}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -277,36 +280,23 @@ export default function DriverStats() {
                   className="relative h-6 bg-gray-800 rounded overflow-hidden"
                   title="Stint timeline"
                 >
-                  {/* Unavailable region: before availFrom */}
-                  {availFrom > 0 && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: `${(availFrom / totalMinutes) * 100}%`,
-                        background: stripeStyle,
-                        backgroundColor: 'rgba(17,24,39,0.7)',
-                        zIndex: 1,
-                      }}
-                    />
-                  )}
-
-                  {/* Unavailable region: after availTo */}
-                  {availTo < totalMinutes && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: `${(availTo / totalMinutes) * 100}%`,
-                        top: 0,
-                        bottom: 0,
-                        right: 0,
-                        background: stripeStyle,
-                        backgroundColor: 'rgba(17,24,39,0.7)',
-                        zIndex: 1,
-                      }}
-                    />
+                  {/* Unavailable regions from availableHours */}
+                  {driver.availableHours && driver.availableHours.map((avail, h) =>
+                    avail === false ? (
+                      <div
+                        key={h}
+                        style={{
+                          position: 'absolute',
+                          left: `${(h * 60 / totalMinutes) * 100}%`,
+                          width: `${(60 / totalMinutes) * 100}%`,
+                          top: 0,
+                          bottom: 0,
+                          background: stripeStyle,
+                          backgroundColor: 'rgba(17,24,39,0.7)',
+                          zIndex: 1,
+                        }}
+                      />
+                    ) : null
                   )}
 
                   {driverStints.map((stint) => {

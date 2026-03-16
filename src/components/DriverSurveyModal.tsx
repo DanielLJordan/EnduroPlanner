@@ -5,8 +5,6 @@ import type { Driver } from '../types'
 type PrefValue = 'prefer' | 'neutral' | 'avoid'
 
 interface SurveyForm {
-  availableFromMinute: string
-  availableToMinute: string
   rainPreference: PrefValue
   nightPreference: PrefValue
   prefersRaceStart: boolean
@@ -79,8 +77,6 @@ export default function DriverSurveyModal({ driver, raceId, onClose }: Props) {
   const { updateDriver } = useRaceStore()
 
   const [form, setForm] = useState<SurveyForm>({
-    availableFromMinute: String(driver.availableFromMinute ?? 0),
-    availableToMinute: String(driver.availableToMinute ?? 9999),
     rainPreference: driver.rainPreference ?? 'neutral',
     nightPreference: driver.nightPreference ?? 'neutral',
     prefersRaceStart: driver.prefersRaceStart ?? false,
@@ -92,8 +88,6 @@ export default function DriverSurveyModal({ driver, raceId, onClose }: Props) {
 
   const handleSave = () => {
     updateDriver(raceId, driver.id, {
-      availableFromMinute: parseFloat(form.availableFromMinute) || 0,
-      availableToMinute: parseFloat(form.availableToMinute) || 9999,
       rainPreference: form.rainPreference,
       nightPreference: form.nightPreference,
       prefersRaceStart: form.prefersRaceStart,
@@ -137,34 +131,6 @@ export default function DriverSurveyModal({ driver, raceId, onClose }: Props) {
 
         {/* Body */}
         <div className="px-5 py-4 space-y-4">
-          {/* Availability window */}
-          <div>
-            <label className="block text-sm text-gray-300 font-medium mb-2">Availability Window</label>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Available From (min)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.availableFromMinute}
-                  onChange={(e) => setForm((f) => ({ ...f, availableFromMinute: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Available To (min)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.availableToMinute}
-                  onChange={(e) => setForm((f) => ({ ...f, availableToMinute: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                />
-                <p className="text-xs text-gray-600 mt-1">Use 9999 for end of race</p>
-              </div>
-            </div>
-          </div>
-
           {/* Rain preference */}
           <div>
             <label className="block text-sm text-gray-300 font-medium mb-2">Rain Preference</label>

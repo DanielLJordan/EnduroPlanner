@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import useRaceStore from '../store/useRaceStore'
 import type { Driver, DriverTelemetry } from '../types'
@@ -12,44 +12,36 @@ const DEFAULT_DRIVER_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
 ]
 
-const TIMEZONES = [
-  { label: 'Not set', tz: '' },
-  { label: 'UTC', tz: 'UTC' },
-  { label: 'ET – New York', tz: 'America/New_York' },
-  { label: 'CT – Chicago', tz: 'America/Chicago' },
-  { label: 'MT – Denver', tz: 'America/Denver' },
-  { label: 'PT – Los Angeles', tz: 'America/Los_Angeles' },
-  { label: 'AKT – Anchorage', tz: 'America/Anchorage' },
-  { label: 'HT – Honolulu', tz: 'Pacific/Honolulu' },
-  { label: 'BRT – São Paulo', tz: 'America/Sao_Paulo' },
-  { label: 'GMT – London', tz: 'Europe/London' },
-  { label: 'CET – Paris', tz: 'Europe/Paris' },
-  { label: 'EET – Helsinki', tz: 'Europe/Helsinki' },
-  { label: 'MSK – Moscow', tz: 'Europe/Moscow' },
-  { label: 'GST – Dubai', tz: 'Asia/Dubai' },
-  { label: 'IST – Kolkata', tz: 'Asia/Kolkata' },
-  { label: 'SGT – Singapore', tz: 'Asia/Singapore' },
-  { label: 'JST – Tokyo', tz: 'Asia/Tokyo' },
-  { label: 'AEST – Sydney', tz: 'Australia/Sydney' },
-  { label: 'NZST – Auckland', tz: 'Pacific/Auckland' },
+const TZ_PRESETS = [
+  { label: 'UTC', offset: 0 },
+  { label: 'EST', offset: -5 },
+  { label: 'EDT', offset: -4 },
+  { label: 'CST', offset: -6 },
+  { label: 'PST', offset: -8 },
+  { label: 'GMT', offset: 0 },
+  { label: 'CET', offset: 1 },
+  { label: 'EET', offset: 2 },
+  { label: 'MSK', offset: 3 },
+  { label: 'IST', offset: 5.5 },
+  { label: 'ICT', offset: 7 },
+  { label: 'SGT', offset: 8 },
+  { label: 'JST', offset: 9 },
+  { label: 'AEST', offset: 10 },
 ]
 
-function getDriverLocalTime(tz: string): string {
-  if (!tz) return ''
-  try {
-    return new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(new Date())
-  } catch {
-    return ''
-  }
+function fmtOffset(offset: number): string {
+  const sign = offset >= 0 ? '+' : '−'
+  const abs = Math.abs(offset)
+  const h = Math.floor(abs)
+  const m = Math.round((abs - h) * 60)
+  return m > 0 ? `GMT${sign}${h}:${String(m).padStart(2, '0')}` : `GMT${sign}${h}`
 }
 
-function tzLabel(tz: string): string {
-  return TIMEZONES.find((t) => t.tz === tz)?.label.split('–')[0].trim() ?? tz
+function getLocalTimeForOffset(offset: number): string {
+  const now = new Date()
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000
+  const local = new Date(utcMs + offset * 3600000)
+  return `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`
 }
 
 interface DriverFormData {
@@ -64,9 +56,7 @@ interface DriverFormData {
   nightPreference: 'prefer' | 'neutral' | 'avoid'
   prefersRaceStart: boolean
   maxConsecutiveStints: string
-  availableFromMinute: string
-  availableToMinute: string
-  timezone: string
+  timezoneOffset: string
 }
 
 const emptyDriverForm = (): DriverFormData => ({
@@ -81,9 +71,7 @@ const emptyDriverForm = (): DriverFormData => ({
   nightPreference: 'neutral',
   prefersRaceStart: false,
   maxConsecutiveStints: '3',
-  availableFromMinute: '0',
-  availableToMinute: '9999',
-  timezone: '',
+  timezoneOffset: '0',
 })
 
 function parseDriverForm(f: DriverFormData) {
@@ -99,9 +87,8 @@ function parseDriverForm(f: DriverFormData) {
     nightPreference: f.nightPreference,
     prefersRaceStart: f.prefersRaceStart,
     maxConsecutiveStints: parseFloat(f.maxConsecutiveStints) || 3,
-    availableFromMinute: parseFloat(f.availableFromMinute) || 0,
-    availableToMinute: parseFloat(f.availableToMinute) || 9999,
-    timezone: f.timezone,
+    timezoneOffset: parseFloat(f.timezoneOffset) || 0,
+    availableHours: [] as boolean[],
     notes: '',
   }
 }
@@ -121,9 +108,7 @@ function driverToForm(driver: Driver): DriverFormData {
     nightPreference: driver.nightPreference ?? 'neutral',
     prefersRaceStart: driver.prefersRaceStart ?? false,
     maxConsecutiveStints: String(driver.maxConsecutiveStints ?? 3),
-    availableFromMinute: String(driver.availableFromMinute ?? 0),
-    availableToMinute: String(driver.availableToMinute ?? 9999),
-    timezone: driver.timezone ?? '',
+    timezoneOffset: String(driver.timezoneOffset ?? 0),
   }
 }
 
@@ -253,6 +238,7 @@ export default function RaceSetup() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [surveyDriverId, setSurveyDriverId] = useState<string | null>(null)
   const [ibtDriverId, setIbtDriverId] = useState<string | null>(null)
+  const availDragRef = useRef<{ active: boolean; fillValue: boolean } | null>(null)
   type TelemetryImport = {
     avgLapTime: number
     avgFuelPerLap: number
@@ -394,6 +380,38 @@ export default function RaceSetup() {
       avgLapTimeSeconds: Math.round(avgLap * 100) / 100,
       ...(avgFuel > 0 ? { burnRatePerLap: Math.round(avgFuel * 1000) / 1000 } : {}),
     }))
+  }
+
+  const applyAvailabilityCell = (driverId: string, hour: number, value: boolean) => {
+    if (!raceId) return
+    const driver = race.drivers.find((d) => d.id === driverId)
+    if (!driver) return
+    const hours = Array.from({ length: race.durationHours }, (_, i) =>
+      driver.availableHours?.[i] !== false
+    )
+    hours[hour] = value
+    updateDriver(raceId, driverId, { availableHours: hours })
+  }
+
+  const handleAvailCellDown = (driverId: string, hour: number) => {
+    const driver = race.drivers.find((d) => d.id === driverId)
+    if (!driver) return
+    const currentVal = driver.availableHours?.[hour] !== false
+    const fillValue = !currentVal
+    availDragRef.current = { active: true, fillValue }
+    applyAvailabilityCell(driverId, hour, fillValue)
+  }
+
+  const handleAvailCellEnter = (driverId: string, hour: number) => {
+    if (!availDragRef.current?.active) return
+    applyAvailabilityCell(driverId, hour, availDragRef.current.fillValue)
+  }
+
+  const setAllAvailability = (driverId: string, value: boolean) => {
+    if (!raceId) return
+    updateDriver(raceId, driverId, {
+      availableHours: Array(race.durationHours).fill(value),
+    })
   }
 
   const handleSaveCar = () => {
@@ -757,15 +775,18 @@ export default function RaceSetup() {
                           </div>
                         </td>
                         <td className="py-2 pr-3">
-                          <select
-                            value={editForm.timezone}
-                            onChange={(e) => setEditForm((f) => ({ ...f, timezone: e.target.value }))}
-                            className="w-36 bg-gray-800 border border-gray-600 text-white rounded px-1 py-1 text-xs focus:outline-none focus:border-blue-500"
-                          >
-                            {TIMEZONES.map((t) => (
-                              <option key={t.tz} value={t.tz}>{t.label}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500 text-xs">GMT</span>
+                            <input
+                              type="number"
+                              step={0.5}
+                              min={-12}
+                              max={14}
+                              value={editForm.timezoneOffset}
+                              onChange={(e) => setEditForm((f) => ({ ...f, timezoneOffset: e.target.value }))}
+                              className="w-16 bg-gray-800 border border-gray-600 text-white rounded px-1 py-1 text-xs focus:outline-none focus:border-blue-500 text-right"
+                            />
+                          </div>
                         </td>
                         <td className="py-2 pr-3">
                           <div className="flex flex-wrap gap-1">
@@ -808,10 +829,10 @@ export default function RaceSetup() {
                           {(driver.maxStintMinutes / 60).toFixed(driver.maxStintMinutes % 60 === 0 ? 0 : 1)}h
                         </td>
                         <td className="py-2 pr-3">
-                          {driver.timezone ? (
+                          {driver.timezoneOffset !== undefined ? (
                             <div className="flex flex-col">
-                              <span className="text-gray-300 text-xs">{tzLabel(driver.timezone)}</span>
-                              <span className="text-gray-500 text-xs font-mono">{getDriverLocalTime(driver.timezone)}</span>
+                              <span className="text-gray-300 text-xs font-mono">{fmtOffset(driver.timezoneOffset ?? 0)}</span>
+                              <span className="text-gray-500 text-xs font-mono">{getLocalTimeForOffset(driver.timezoneOffset ?? 0)}</span>
                             </div>
                           ) : (
                             <span className="text-gray-600 text-xs">—</span>
@@ -973,15 +994,37 @@ export default function RaceSetup() {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Timezone</label>
-                <select
-                  value={driverForm.timezone}
-                  onChange={(e) => setDriverForm((f) => ({ ...f, timezone: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                >
-                  {TIMEZONES.map((t) => (
-                    <option key={t.tz} value={t.tz}>{t.label}</option>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {TZ_PRESETS.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => setDriverForm((f) => ({ ...f, timezoneOffset: String(p.offset) }))}
+                      className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                        parseFloat(driverForm.timezoneOffset) === p.offset
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
                   ))}
-                </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 flex-shrink-0">GMT</span>
+                  <input
+                    type="number"
+                    step={0.5}
+                    min={-12}
+                    max={14}
+                    value={driverForm.timezoneOffset}
+                    onChange={(e) => setDriverForm((f) => ({ ...f, timezoneOffset: e.target.value }))}
+                    className="w-24 bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                  />
+                  <span className="text-xs text-gray-500">
+                    = {fmtOffset(parseFloat(driverForm.timezoneOffset) || 0)}
+                  </span>
+                </div>
               </div>
 
               {/* Advanced Preferences Section */}
@@ -996,38 +1039,6 @@ export default function RaceSetup() {
                 </button>
                 {showAdvanced && (
                   <div className="px-3 py-3 space-y-3 bg-gray-800/50">
-                    {/* Availability Window */}
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Availability Window</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Available From (min)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={driverForm.availableFromMinute}
-                            onChange={(e) =>
-                              setDriverForm((f) => ({ ...f, availableFromMinute: e.target.value }))
-                            }
-                            className="w-full bg-gray-800 border border-gray-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Available To (min)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={driverForm.availableToMinute}
-                            onChange={(e) =>
-                              setDriverForm((f) => ({ ...f, availableToMinute: e.target.value }))
-                            }
-                            className="w-full bg-gray-800 border border-gray-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
-                          />
-                          <p className="text-xs text-gray-600 mt-0.5">Use 9999 for end of race</p>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Rain Preference */}
                     <div className="flex items-center justify-between gap-3">
                       <label className="text-xs text-gray-400 w-28 flex-shrink-0">Rain Preference</label>
@@ -1090,6 +1101,143 @@ export default function RaceSetup() {
           </div>
         </div>
       </div>
+
+      {/* Driver Availability Grid */}
+      {race.drivers.length > 0 && (
+        <div
+          className="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-6"
+          onMouseUp={() => { availDragRef.current = null }}
+          onMouseLeave={() => { availDragRef.current = null }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-lg font-semibold text-white">Driver Availability</h2>
+            <p className="text-xs text-gray-500">Click or drag to toggle hours · Green = available</p>
+          </div>
+          <p className="text-xs text-gray-600 mb-4">
+            Race hour 0 = race start. Set which hours each driver is available to drive.
+            The auto-planner will respect these windows.
+          </p>
+
+          <div className="overflow-x-auto">
+            {/* Grid layout: name col + N hour cols */}
+            {(() => {
+              const hours = race.durationHours
+              // compute night hours if startTime is set
+              const nightSet = new Set<number>()
+              if (race.startTime) {
+                const start = new Date(race.startTime)
+                for (let h = 0; h < hours; h++) {
+                  const utcH = (start.getUTCHours() + h) % 24
+                  if (utcH >= 20 || utcH < 6) nightSet.add(h)
+                }
+              }
+              return (
+                <table className="border-separate" style={{ borderSpacing: '2px' }}>
+                  <thead>
+                    <tr>
+                      <th className="w-32" />
+                      {Array.from({ length: hours }, (_, h) => (
+                        <th
+                          key={h}
+                          className={`text-center text-xs pb-1 w-8 ${
+                            nightSet.has(h) ? 'text-indigo-400' : 'text-gray-500'
+                          }`}
+                          title={nightSet.has(h) ? `Hour ${h} (night)` : `Hour ${h}`}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                      <th className="w-20" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {race.drivers.map((driver) => (
+                      <tr key={driver.id}>
+                        {/* Driver name */}
+                        <td className="pr-2 py-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: driver.color }}
+                            />
+                            <span className="text-xs text-gray-300 truncate">{driver.name.split(' ')[0]}</span>
+                            {(driver.timezoneOffset !== undefined) && (
+                              <span className="text-xs text-gray-600 flex-shrink-0">
+                                {fmtOffset(driver.timezoneOffset ?? 0)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Hour cells */}
+                        {Array.from({ length: hours }, (_, h) => {
+                          const available = driver.availableHours?.length
+                            ? driver.availableHours[h] !== false
+                            : true
+                          return (
+                            <td
+                              key={h}
+                              className={`h-8 w-8 rounded cursor-pointer select-none transition-colors ${
+                                nightSet.has(h) && !available ? 'opacity-60' : ''
+                              }`}
+                              style={{
+                                backgroundColor: available
+                                  ? driver.color + 'bb'
+                                  : nightSet.has(h) ? '#1e1b3a' : '#1f2937',
+                              }}
+                              onMouseDown={() => handleAvailCellDown(driver.id, h)}
+                              onMouseEnter={() => handleAvailCellEnter(driver.id, h)}
+                              title={`${driver.name} — Hour ${h}: ${available ? 'Available' : 'Unavailable'}`}
+                            />
+                          )
+                        })}
+
+                        {/* Quick buttons */}
+                        <td className="pl-2 py-0.5">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setAllAvailability(driver.id, true)}
+                              className="px-1.5 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                              title="Mark all available"
+                            >
+                              All
+                            </button>
+                            <button
+                              onClick={() => setAllAvailability(driver.id, false)}
+                              className="px-1.5 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                              title="Mark all unavailable"
+                            >
+                              None
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            })()}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-blue-500/70 inline-block" />
+              Available
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-gray-800 inline-block" />
+              Unavailable
+            </div>
+            {race.startTime && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-indigo-900/60 inline-block" />
+                Night (20:00–06:00 UTC)
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Driver Survey Modal */}
       {surveyDriver && raceId && (

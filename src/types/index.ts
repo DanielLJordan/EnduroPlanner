@@ -25,10 +25,9 @@ export interface Driver {
   nightPreference: 'prefer' | 'neutral' | 'avoid'
   prefersRaceStart: boolean
   maxConsecutiveStints: number
-  availableFromMinute: number
-  availableToMinute: number
+  timezoneOffset: number      // hours from UTC, e.g. 7 = GMT+7, -5 = GMT-5
+  availableHours: boolean[]   // one entry per race hour; true = available (empty = all available)
   notes: string
-  timezone: string            // IANA timezone e.g. "America/New_York" (empty = not set)
   telemetry?: DriverTelemetry
 }
 

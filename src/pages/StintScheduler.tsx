@@ -22,6 +22,21 @@ type StrategyMode = 'pace' | 'efficiency' | 'consistency'
 // Strategy generators
 // ────────────────────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────────────────────
+// Availability helpers
+// ────────────────────────────────────────────────────────────────────────────────
+
+function isDriverAvailableAt(driver: Driver, minute: number): boolean {
+  if (!driver.availableHours || driver.availableHours.length === 0) return true
+  const hour = Math.floor(minute / 60)
+  return driver.availableHours[hour] !== false
+}
+
+function getAvailableDrivers(drivers: Driver[], minute: number): Driver[] {
+  const avail = drivers.filter((d) => isDriverAvailableAt(d, minute))
+  return avail.length > 0 ? avail : drivers // always return someone to avoid infinite loops
+}
+
 function calcFuelStintMinutes(race: RaceEvent): number {
   if (race.car.burnRatePerLap > 0 && race.car.avgLapTimeSeconds > 0) {
     return (
@@ -77,7 +92,10 @@ function generatePaceStints(race: RaceEvent, variantMultiplier: number): Stint[]
 
   let rotIdx = 0
   while (currentMinute < totalMinutes) {
-    const driver = rotation[rotIdx % rotation.length]
+    // Filter rotation to available drivers at this moment
+    const availRot = rotation.filter((d) => isDriverAvailableAt(d, currentMinute))
+    const rotToUse = availRot.length > 0 ? availRot : rotation
+    const driver = rotToUse[rotIdx % rotToUse.length]
     const remaining = totalMinutes - currentMinute
 
     // Scale stint length by irating rank within drivers array
@@ -121,7 +139,8 @@ function generateEfficiencyStints(race: RaceEvent, variantMultiplier: number): S
   let driverIdx = 0
 
   while (currentMinute < totalMinutes) {
-    const driver = drivers[driverIdx % drivers.length]
+    const availDrivers = getAvailableDrivers(drivers, currentMinute)
+    const driver = availDrivers[driverIdx % availDrivers.length]
     const remaining = totalMinutes - currentMinute
     const duration = clampStintDuration(baseStint, driver, fuelMax, remaining)
 
@@ -167,17 +186,18 @@ function generateConsistencyStints(race: RaceEvent, variantMultiplier: number): 
 
   while (currentMinute < totalMinutes) {
     const isNight = currentMinute >= nightStartMinute
+    const availOrdered = getAvailableDrivers(orderedDrivers, currentMinute)
 
     // Pick best available driver for current time segment
     let chosenDriver: Driver
     if (isNight) {
-      const nightPref = orderedDrivers.find((d, i) => {
-        if (i !== driverIdx % orderedDrivers.length) return false
+      const nightPref = availOrdered.find((d, i) => {
+        if (i !== driverIdx % availOrdered.length) return false
         return d.nightPreference === 'prefer'
       })
-      chosenDriver = nightPref ?? orderedDrivers[driverIdx % orderedDrivers.length]
+      chosenDriver = nightPref ?? availOrdered[driverIdx % availOrdered.length]
     } else {
-      chosenDriver = orderedDrivers[driverIdx % orderedDrivers.length]
+      chosenDriver = availOrdered[driverIdx % availOrdered.length]
     }
 
     const remaining = totalMinutes - currentMinute
@@ -381,9 +401,6 @@ export default function StintScheduler() {
       .filter((s) => s.driverId === driver.id)
       .sort((a, b) => a.plannedStartMinute - b.plannedStartMinute)
 
-    const availFrom = driver.availableFromMinute ?? 0
-    const availTo = Math.min(driver.availableToMinute ?? 9999, totalMinutes)
-
     driverStints.forEach((stint) => {
       if (stint.plannedDurationMinutes > driver.maxStintMinutes) {
         warnings.push({
@@ -397,14 +414,19 @@ export default function StintScheduler() {
           message: `${driver.name}: Stint at ${minutesToHHMM(stint.plannedStartMinute)} is below min stint time (${(driver.minStintMinutes / 60).toFixed(1)}h)`,
         })
       }
-      if (
-        stint.plannedStartMinute < availFrom ||
-        stint.plannedStartMinute + stint.plannedDurationMinutes > availTo + 1
-      ) {
-        warnings.push({
-          type: 'availability',
-          message: `${driver.name}: Stint at ${minutesToHHMM(stint.plannedStartMinute)} is outside their availability window (${minutesToHHMM(availFrom)}–${availTo >= totalMinutes ? 'end' : minutesToHHMM(availTo)})`,
-        })
+      if (driver.availableHours && driver.availableHours.length > 0) {
+        const startHour = Math.floor(stint.plannedStartMinute / 60)
+        const endHour = Math.floor((stint.plannedStartMinute + stint.plannedDurationMinutes - 1) / 60)
+        let hasUnavailable = false
+        for (let h = startHour; h <= endHour; h++) {
+          if (driver.availableHours[h] === false) { hasUnavailable = true; break }
+        }
+        if (hasUnavailable) {
+          warnings.push({
+            type: 'availability',
+            message: `${driver.name}: Stint at ${minutesToHHMM(stint.plannedStartMinute)} overlaps an unavailable time slot`,
+          })
+        }
       }
 
       driverStints.forEach((other) => {
@@ -829,15 +851,17 @@ export default function StintScheduler() {
                   (sum, s) => sum + s.plannedDurationMinutes,
                   0
                 )
-                const availFrom = driver.availableFromMinute ?? 0
-                const availTo = Math.min(driver.availableToMinute ?? 9999, totalMinutes)
-                const unavailBeforeX = availFrom > 0
-                  ? (availFrom / totalMinutes) * timelineWidth
-                  : 0
-                const unavailAfterStart =
-                  availTo < totalMinutes
-                    ? (availTo / totalMinutes) * timelineWidth
-                    : timelineWidth
+                // Build unavailable ranges from availableHours for visual hatching
+                const unavailRanges: { x: number; w: number }[] = []
+                if (driver.availableHours && driver.availableHours.length > 0) {
+                  for (let h = 0; h < driver.availableHours.length; h++) {
+                    if (driver.availableHours[h] === false) {
+                      const x = (h * 60 / totalMinutes) * timelineWidth
+                      const w = (60 / totalMinutes) * timelineWidth
+                      unavailRanges.push({ x, w })
+                    }
+                  }
+                }
                 const stripeStyle =
                   'repeating-linear-gradient(45deg, rgba(0,0,0,0.4), rgba(0,0,0,0.4) 4px, transparent 4px, transparent 8px)'
 
@@ -915,14 +939,15 @@ export default function StintScheduler() {
                         />
                       ))}
 
-                      {/* Unavailability shading: before availFrom */}
-                      {availFrom > 0 && (
+                      {/* Unavailability shading per unavailable hour */}
+                      {unavailRanges.map(({ x, w }, i) => (
                         <div
+                          key={i}
                           style={{
                             position: 'absolute',
-                            left: 0,
+                            left: x,
                             top: 0,
-                            width: unavailBeforeX,
+                            width: w,
                             bottom: 0,
                             background: stripeStyle,
                             backgroundColor: 'rgba(17,24,39,0.7)',
@@ -930,24 +955,7 @@ export default function StintScheduler() {
                             zIndex: 1,
                           }}
                         />
-                      )}
-
-                      {/* Unavailability shading: after availTo */}
-                      {availTo < totalMinutes && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            left: unavailAfterStart,
-                            top: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: stripeStyle,
-                            backgroundColor: 'rgba(17,24,39,0.7)',
-                            pointerEvents: 'none',
-                            zIndex: 1,
-                          }}
-                        />
-                      )}
+                      ))}
 
                       {/* Fuel window dashed lines inside driver rows */}
                       {showFuelWindows &&
@@ -1056,15 +1064,16 @@ export default function StintScheduler() {
               const ratio = fairShareMinutes > 0 ? allocatedMinutes / fairShareMinutes : 0
               const pct = Math.round(ratio * 100)
 
-              const availFrom = driver.availableFromMinute ?? 0
-              const availTo = driver.availableToMinute ?? 9999
-              const violatesAvail = race.stints
-                .filter((s) => s.driverId === driver.id)
-                .some(
-                  (s) =>
-                    s.plannedStartMinute < availFrom ||
-                    s.plannedStartMinute + s.plannedDurationMinutes > Math.min(availTo, totalMinutes) + 1
-                )
+              const violatesAvail = driver.availableHours && driver.availableHours.length > 0
+                ? race.stints.filter((s) => s.driverId === driver.id).some((s) => {
+                    const startH = Math.floor(s.plannedStartMinute / 60)
+                    const endH = Math.floor((s.plannedStartMinute + s.plannedDurationMinutes - 1) / 60)
+                    for (let h = startH; h <= endH; h++) {
+                      if (driver.availableHours![h] === false) return true
+                    }
+                    return false
+                  })
+                : false
 
               let barColor: string
               let labelColor: string
