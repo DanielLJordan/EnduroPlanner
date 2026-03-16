@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Outlet, useParams } from 'react-router-dom'
-import { UserButton } from '@clerk/clerk-react'
+import { UserButton, OrganizationSwitcher } from '@clerk/clerk-react'
 import NavBar from './NavBar'
 import useRaceStore from '../store/useRaceStore'
 
@@ -44,6 +44,18 @@ export default function Layout() {
               }}
             />
           </div>
+
+          {/* Team / org switcher */}
+          <OrganizationSwitcher
+            hidePersonal
+            appearance={{
+              elements: {
+                rootBox: 'w-full',
+                organizationSwitcherTrigger: 'w-full justify-between bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 hover:bg-gray-700',
+                organizationSwitcherTriggerIcon: 'text-gray-500',
+              },
+            }}
+          />
 
           {/* Race info */}
           {race ? (

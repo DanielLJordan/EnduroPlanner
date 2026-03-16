@@ -27,8 +27,13 @@ function toRaceEvent(doc: any) {
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 export const list = query({
-  handler: async (ctx) => {
-    const docs = await ctx.db.query('races').collect()
+  args: { orgId: v.optional(v.string()) },
+  handler: async (ctx, { orgId }) => {
+    if (!orgId) return []
+    const docs = await ctx.db
+      .query('races')
+      .withIndex('by_orgId', (q) => q.eq('orgId', orgId))
+      .collect()
     return docs.map(toRaceEvent)
   },
 })
@@ -44,6 +49,7 @@ export const get = query({
 // ── Race CRUD ─────────────────────────────────────────────────────────────────
 export const create = mutation({
   args: {
+    orgId: v.string(),
     raceId: v.string(),
     name: v.string(),
     track: v.string(),
@@ -54,6 +60,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.insert('races', {
+      orgId: args.orgId,
       raceId: args.raceId,
       name: args.name,
       track: args.track,

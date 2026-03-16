@@ -3,6 +3,7 @@ import { v } from 'convex/values'
 
 export default defineSchema({
   races: defineTable({
+    orgId: v.optional(v.string()), // Clerk organization ID — scopes race to a team
     raceId: v.string(), // app UUID used in URLs
     name: v.string(),
     track: v.string(),
@@ -14,5 +15,7 @@ export default defineSchema({
     pitStops: v.array(v.any()),
     car: v.any(),
     raceState: v.any(),
-  }).index('by_raceId', ['raceId']),
+  })
+    .index('by_raceId', ['raceId'])
+    .index('by_orgId', ['orgId']),
 })

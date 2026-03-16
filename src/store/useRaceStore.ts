@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
+import { useOrganization } from '@clerk/clerk-react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { v4 as uuidv4 } from 'uuid'
@@ -22,7 +23,9 @@ const useLocalStore = create<{
 // ── Main hook — same interface as before ──────────────────────────────────────
 export default function useRaceStore() {
   const { activeRaceId, setActiveRace } = useLocalStore()
-  const races: RaceEvent[] = useQuery(api.races.list) ?? []
+  const { organization } = useOrganization()
+  const orgId = organization?.id
+  const races: RaceEvent[] = useQuery(api.races.list, { orgId }) ?? []
 
   const _create       = useMutation(api.races.create)
   const _remove       = useMutation(api.races.remove)
@@ -53,8 +56,9 @@ export default function useRaceStore() {
     createRace: async (
       raceData: Omit<RaceEvent, 'id' | 'drivers' | 'stints' | 'pitStops' | 'raceState'>
     ): Promise<string> => {
+      if (!orgId) throw new Error('No team selected. Create or join a team first.')
       const id = uuidv4()
-      await _create({ raceId: id, ...raceData })
+      await _create({ orgId, raceId: id, ...raceData })
       return id
     },
 
