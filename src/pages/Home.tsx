@@ -133,9 +133,9 @@ export default function Home() {
     setForm(defaultForm)
   }
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!form.name.trim() || !form.track.trim()) return
-    const id = createRace({
+    const id = await createRace({
       name: form.name.trim(),
       track: form.track.trim(),
       durationHours: parseFloat(form.durationHours) || 6,
