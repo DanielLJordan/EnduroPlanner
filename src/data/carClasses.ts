@@ -16,8 +16,6 @@ export const CAR_CLASSES: CarClass[] = [
       'Porsche 963',
       'Acura ARX-06 GTP',
       'Ferrari 499P',
-      'Toyota GR010 Hybrid',
-      'Peugeot 9X8',
     ],
   },
   {
@@ -43,7 +41,7 @@ export const CAR_CLASSES: CarClass[] = [
       'Aston Martin Vantage GT3',
       'Ford Mustang GT3',
       'Corvette Z06 GT3.R',
-      'Lexus RC F GT3',
+      'Audi R8 LMS GT3 EVO II',
     ],
   },
   {
