@@ -37,6 +37,18 @@ function fmtOffset(offset: number): string {
   return m > 0 ? `GMT${sign}${h}:${String(m).padStart(2, '0')}` : `GMT${sign}${h}`
 }
 
+function raceHourToLocal(h: number, raceStartISO: string | undefined, tzOffset: number): string {
+  if (!raceStartISO) return String(h)
+  const start = new Date(raceStartISO)
+  const utcFractional = start.getUTCHours() + start.getUTCMinutes() / 60 + h
+  const local = ((utcFractional + tzOffset) % 24 + 24) % 24
+  const lh = Math.floor(local)
+  const lm = Math.round((local - lh) * 60)
+  return lm > 0
+    ? `${String(lh).padStart(2, '0')}:${String(lm).padStart(2, '0')}`
+    : String(lh).padStart(2, '0')
+}
+
 function getLocalTimeForOffset(offset: number): string {
   const now = new Date()
   const utcMs = now.getTime() + now.getTimezoneOffset() * 60000
@@ -1114,15 +1126,14 @@ export default function RaceSetup() {
             <p className="text-xs text-gray-500">Click or drag to toggle hours · Green = available</p>
           </div>
           <p className="text-xs text-gray-600 mb-4">
-            Race hour 0 = race start. Set which hours each driver is available to drive.
-            The auto-planner will respect these windows.
+            Times shown in each driver's local timezone. Set which hours each driver is available to drive —
+            the auto-planner will respect these windows.
+            {!race.startTime && ' Set a race start time to see actual local clock times.'}
           </p>
 
           <div className="overflow-x-auto">
-            {/* Grid layout: name col + N hour cols */}
             {(() => {
               const hours = race.durationHours
-              // compute night hours if startTime is set
               const nightSet = new Set<number>()
               if (race.startTime) {
                 const start = new Date(race.startTime)
@@ -1133,86 +1144,90 @@ export default function RaceSetup() {
               }
               return (
                 <table className="border-separate" style={{ borderSpacing: '2px' }}>
-                  <thead>
-                    <tr>
-                      <th className="w-32" />
-                      {Array.from({ length: hours }, (_, h) => (
-                        <th
-                          key={h}
-                          className={`text-center text-xs pb-1 w-8 ${
-                            nightSet.has(h) ? 'text-indigo-400' : 'text-gray-500'
-                          }`}
-                          title={nightSet.has(h) ? `Hour ${h} (night)` : `Hour ${h}`}
-                        >
-                          {h}
-                        </th>
-                      ))}
-                      <th className="w-20" />
-                    </tr>
-                  </thead>
                   <tbody>
-                    {race.drivers.map((driver) => (
-                      <tr key={driver.id}>
-                        {/* Driver name */}
-                        <td className="pr-2 py-0.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: driver.color }}
-                            />
-                            <span className="text-xs text-gray-300 truncate">{driver.name.split(' ')[0]}</span>
-                            {(driver.timezoneOffset !== undefined) && (
-                              <span className="text-xs text-gray-600 flex-shrink-0">
-                                {fmtOffset(driver.timezoneOffset ?? 0)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                    {race.drivers.map((driver) => {
+                      const tz = driver.timezoneOffset ?? 0
+                      return (
+                        <>
+                          {/* Local time label row */}
+                          <tr key={`${driver.id}-labels`}>
+                            <td className="pr-2 pb-0 pt-3 align-bottom">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: driver.color }}
+                                />
+                                <span className="text-xs text-gray-300 truncate font-medium">
+                                  {driver.name.split(' ')[0]}
+                                </span>
+                                <span className="text-xs text-gray-600 flex-shrink-0 font-mono">
+                                  {fmtOffset(tz)}
+                                </span>
+                              </div>
+                            </td>
+                            {Array.from({ length: hours }, (_, h) => {
+                              const label = raceHourToLocal(h, race.startTime || undefined, tz)
+                              const isNight = nightSet.has(h)
+                              return (
+                                <td
+                                  key={h}
+                                  className={`text-center align-bottom pb-0.5 w-8 select-none ${
+                                    isNight ? 'text-indigo-400' : 'text-gray-500'
+                                  }`}
+                                  style={{ fontSize: '10px', lineHeight: 1 }}
+                                  title={`Race hour ${h} → ${label} local`}
+                                >
+                                  {label}
+                                </td>
+                              )
+                            })}
+                            <td />
+                          </tr>
 
-                        {/* Hour cells */}
-                        {Array.from({ length: hours }, (_, h) => {
-                          const available = driver.availableHours?.length
-                            ? driver.availableHours[h] !== false
-                            : true
-                          return (
-                            <td
-                              key={h}
-                              className={`h-8 w-8 rounded cursor-pointer select-none transition-colors ${
-                                nightSet.has(h) && !available ? 'opacity-60' : ''
-                              }`}
-                              style={{
-                                backgroundColor: available
-                                  ? driver.color + 'bb'
-                                  : nightSet.has(h) ? '#1e1b3a' : '#1f2937',
-                              }}
-                              onMouseDown={() => handleAvailCellDown(driver.id, h)}
-                              onMouseEnter={() => handleAvailCellEnter(driver.id, h)}
-                              title={`${driver.name} — Hour ${h}: ${available ? 'Available' : 'Unavailable'}`}
-                            />
-                          )
-                        })}
-
-                        {/* Quick buttons */}
-                        <td className="pl-2 py-0.5">
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => setAllAvailability(driver.id, true)}
-                              className="px-1.5 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
-                              title="Mark all available"
-                            >
-                              All
-                            </button>
-                            <button
-                              onClick={() => setAllAvailability(driver.id, false)}
-                              className="px-1.5 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
-                              title="Mark all unavailable"
-                            >
-                              None
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          {/* Availability cells row */}
+                          <tr key={`${driver.id}-cells`}>
+                            <td className="pr-2 py-0.5" />
+                            {Array.from({ length: hours }, (_, h) => {
+                              const available = driver.availableHours?.length
+                                ? driver.availableHours[h] !== false
+                                : true
+                              const isNight = nightSet.has(h)
+                              return (
+                                <td
+                                  key={h}
+                                  className="w-8 rounded cursor-pointer select-none transition-colors"
+                                  style={{
+                                    height: 28,
+                                    backgroundColor: available
+                                      ? driver.color + 'bb'
+                                      : isNight ? '#1e1b3a' : '#1f2937',
+                                  }}
+                                  onMouseDown={() => handleAvailCellDown(driver.id, h)}
+                                  onMouseEnter={() => handleAvailCellEnter(driver.id, h)}
+                                  title={`${driver.name} — ${raceHourToLocal(h, race.startTime || undefined, tz)} local: ${available ? 'Available' : 'Unavailable'}`}
+                                />
+                              )
+                            })}
+                            <td className="pl-2 py-0.5">
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => setAllAvailability(driver.id, true)}
+                                  className="px-1.5 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                                >
+                                  All
+                                </button>
+                                <button
+                                  onClick={() => setAllAvailability(driver.id, false)}
+                                  className="px-1.5 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                                >
+                                  None
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        </>
+                      )
+                    })}
                   </tbody>
                 </table>
               )
