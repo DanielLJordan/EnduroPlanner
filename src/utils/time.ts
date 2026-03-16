@@ -24,3 +24,20 @@ export function secondsToMMSS(seconds: number): string {
   const s = Math.floor(seconds % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
+
+/** Format lap time as M:SS.mmm  e.g. 92.456 → "1:32.456" */
+export function formatLapTime(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${s.toFixed(3).padStart(6, '0')}`
+}
+
+/** Parse lap time input: accepts "92", "1:32", "1:32.5" → seconds */
+export function parseLapTime(str: string): number {
+  const s = str.trim()
+  if (s.includes(':')) {
+    const [mStr, sStr] = s.split(':')
+    return (parseInt(mStr) || 0) * 60 + (parseFloat(sStr) || 0)
+  }
+  return parseFloat(s) || 0
+}

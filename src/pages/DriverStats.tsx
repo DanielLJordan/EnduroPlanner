@@ -1,13 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import useRaceStore from '../store/useRaceStore'
-import { formatMinutes } from '../utils/time'
+import { formatMinutes, formatLapTime } from '../utils/time'
 import type { Driver, Stint } from '../types'
-
-function formatLapTime(sec: number) {
-  const m = Math.floor(sec / 60)
-  const s = (sec % 60).toFixed(3).padStart(6, '0')
-  return `${m}:${s}`
-}
 
 type DriverStatus = 'DRIVING' | 'ON DECK' | 'RESTING' | 'COMPLETED'
 

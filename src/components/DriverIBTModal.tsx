@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { parseIBTFile } from '../utils/ibtParser'
 import type { Driver, DriverTelemetry } from '../types'
+import { formatLapTime } from '../utils/time'
 
 interface Props {
   driver: Driver
@@ -46,12 +47,6 @@ export default function DriverIBTModal({ driver, onSave, onClose }: Props) {
     reader.readAsArrayBuffer(file)
   }
 
-  function formatLapTime(sec: number) {
-    const m = Math.floor(sec / 60)
-    const s = (sec % 60).toFixed(3).padStart(6, '0')
-    return `${m}:${s}`
-  }
-
   const bestLap = parsed
     ? [...parsed.laps].sort((a, b) => a.lapTimeSeconds - b.lapTimeSeconds)[0]
     : null
@@ -90,7 +85,7 @@ export default function DriverIBTModal({ driver, onSave, onClose }: Props) {
               </svg>
               <div className="text-xs text-blue-300">
                 <span className="font-semibold">Existing data:</span>{' '}
-                {driver.telemetry.totalLaps} laps · {driver.telemetry.avgLapTimeSeconds}s avg ·{' '}
+                {driver.telemetry.totalLaps} laps · {formatLapTime(driver.telemetry.avgLapTimeSeconds)} avg ·{' '}
                 {driver.telemetry.trackName} · uploaded {new Date(driver.telemetry.uploadedAt).toLocaleDateString()}
                 <br />
                 <span className="text-blue-400/70">Uploading a new file will replace this.</span>

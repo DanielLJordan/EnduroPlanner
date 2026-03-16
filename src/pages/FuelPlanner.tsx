@@ -8,6 +8,7 @@ import {
   lapsFromMinutes,
   fuelUsedInStint,
 } from '../utils/fuel'
+import { formatLapTime, parseLapTime } from '../utils/time'
 import { minutesToHHMM } from '../utils/time'
 
 function StatCard({
@@ -91,12 +92,12 @@ export default function FuelPlanner() {
 
   const [tankSizeStr, setTankSizeStr] = useState(String(race?.car.tankSizeLiters ?? 70))
   const [burnRateStr, setBurnRateStr] = useState(String(race?.car.burnRatePerLap ?? 3.0))
-  const [lapTimeStr, setLapTimeStr] = useState(String(race?.car.avgLapTimeSeconds ?? 90))
+  const [lapTimeStr, setLapTimeStr] = useState(() => formatLapTime(race?.car.avgLapTimeSeconds ?? 90))
   const [safetyMarginStr, setSafetyMarginStr] = useState('5')
 
   const tankSize = parseFloat(tankSizeStr) || 0
   const burnRate = parseFloat(burnRateStr) || 0
-  const lapTime = parseFloat(lapTimeStr) || 0
+  const lapTime = parseLapTime(lapTimeStr) || 0
   const safetyMargin = parseFloat(safetyMarginStr) || 0
 
   const raceDurationHours = race?.durationHours ?? 6
@@ -113,7 +114,7 @@ export default function FuelPlanner() {
     if (!race) return
     setTankSizeStr(String(race.car.tankSizeLiters))
     setBurnRateStr(String(race.car.burnRatePerLap))
-    setLapTimeStr(String(race.car.avgLapTimeSeconds))
+    setLapTimeStr(formatLapTime(race.car.avgLapTimeSeconds))
   }
 
   const barLaps = Math.min(maxLaps, 50)
@@ -167,9 +168,9 @@ export default function FuelPlanner() {
           <SliderRow
             label="Avg Lap Time"
             value={lapTime}
-            displayValue={`${lapTime}s`}
+            displayValue={formatLapTime(lapTime)}
             min={60} max={300} step={1}
-            onChange={setLapTimeStr}
+            onChange={(s) => setLapTimeStr(formatLapTime(parseFloat(s) || 90))}
           />
           <SliderRow
             label="Safety Margin"
@@ -185,7 +186,6 @@ export default function FuelPlanner() {
             {[
               { label: 'Tank (L)', val: tankSizeStr, set: setTankSizeStr, step: '0.5' },
               { label: 'Burn (L/lap)', val: burnRateStr, set: setBurnRateStr, step: '0.1' },
-              { label: 'Lap Time (s)', val: lapTimeStr, set: setLapTimeStr, step: '1' },
               { label: 'Safety (%)', val: safetyMarginStr, set: setSafetyMarginStr, step: '1' },
             ].map(({ label, val, set, step }) => (
               <div key={label}>
@@ -199,6 +199,22 @@ export default function FuelPlanner() {
                 />
               </div>
             ))}
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Lap Time (M:SS)</label>
+              <input
+                type="text"
+                value={lapTimeStr}
+                onChange={(e) => {
+                  setLapTimeStr(e.target.value)
+                }}
+                onBlur={() => {
+                  const sec = parseLapTime(lapTimeStr)
+                  if (sec > 0) setLapTimeStr(formatLapTime(sec))
+                }}
+                placeholder="1:32.000"
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:border-blue-500 font-mono"
+              />
+            </div>
           </div>
         </div>
 
