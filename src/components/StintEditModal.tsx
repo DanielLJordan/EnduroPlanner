@@ -44,12 +44,12 @@ export default function StintEditModal({
   if (selectedDriver) {
     if (plannedDurationMinutes > selectedDriver.maxStintMinutes) {
       warnings.push(
-        `Duration exceeds driver max stint time (${selectedDriver.maxStintMinutes} min)`
+        `Duration exceeds driver max stint time (${(selectedDriver.maxStintMinutes / 60).toFixed(1)}h)`
       )
     }
     if (plannedDurationMinutes < selectedDriver.minStintMinutes) {
       warnings.push(
-        `Duration is below driver min stint time (${selectedDriver.minStintMinutes} min)`
+        `Duration is below driver min stint time (${(selectedDriver.minStintMinutes / 60).toFixed(1)}h)`
       )
     }
   }
@@ -113,7 +113,7 @@ export default function StintEditModal({
             </div>
             {selectedDriver && (
               <p className="text-xs text-gray-500 mt-1">
-                Stint range: {selectedDriver.minStintMinutes}–{selectedDriver.maxStintMinutes} min
+                Stint range: {(selectedDriver.minStintMinutes / 60).toFixed(1)}h – {(selectedDriver.maxStintMinutes / 60).toFixed(1)}h
               </p>
             )}
           </div>

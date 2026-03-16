@@ -12,20 +12,61 @@ const DEFAULT_DRIVER_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
 ]
 
+const TIMEZONES = [
+  { label: 'Not set', tz: '' },
+  { label: 'UTC', tz: 'UTC' },
+  { label: 'ET – New York', tz: 'America/New_York' },
+  { label: 'CT – Chicago', tz: 'America/Chicago' },
+  { label: 'MT – Denver', tz: 'America/Denver' },
+  { label: 'PT – Los Angeles', tz: 'America/Los_Angeles' },
+  { label: 'AKT – Anchorage', tz: 'America/Anchorage' },
+  { label: 'HT – Honolulu', tz: 'Pacific/Honolulu' },
+  { label: 'BRT – São Paulo', tz: 'America/Sao_Paulo' },
+  { label: 'GMT – London', tz: 'Europe/London' },
+  { label: 'CET – Paris', tz: 'Europe/Paris' },
+  { label: 'EET – Helsinki', tz: 'Europe/Helsinki' },
+  { label: 'MSK – Moscow', tz: 'Europe/Moscow' },
+  { label: 'GST – Dubai', tz: 'Asia/Dubai' },
+  { label: 'IST – Kolkata', tz: 'Asia/Kolkata' },
+  { label: 'SGT – Singapore', tz: 'Asia/Singapore' },
+  { label: 'JST – Tokyo', tz: 'Asia/Tokyo' },
+  { label: 'AEST – Sydney', tz: 'Australia/Sydney' },
+  { label: 'NZST – Auckland', tz: 'Pacific/Auckland' },
+]
+
+function getDriverLocalTime(tz: string): string {
+  if (!tz) return ''
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date())
+  } catch {
+    return ''
+  }
+}
+
+function tzLabel(tz: string): string {
+  return TIMEZONES.find((t) => t.tz === tz)?.label.split('–')[0].trim() ?? tz
+}
+
 interface DriverFormData {
   name: string
   initials: string
   iracingId: string
   irating: string
   color: string
-  minStintMinutes: string
-  maxStintMinutes: string
+  minStintHours: string
+  maxStintHours: string
   rainPreference: 'prefer' | 'neutral' | 'avoid'
   nightPreference: 'prefer' | 'neutral' | 'avoid'
   prefersRaceStart: boolean
   maxConsecutiveStints: string
   availableFromMinute: string
   availableToMinute: string
+  timezone: string
 }
 
 const emptyDriverForm = (): DriverFormData => ({
@@ -34,47 +75,55 @@ const emptyDriverForm = (): DriverFormData => ({
   iracingId: '',
   irating: '2000',
   color: DEFAULT_DRIVER_COLORS[0],
-  minStintMinutes: '30',
-  maxStintMinutes: '120',
+  minStintHours: '0.5',
+  maxStintHours: '2',
   rainPreference: 'neutral',
   nightPreference: 'neutral',
   prefersRaceStart: false,
   maxConsecutiveStints: '3',
   availableFromMinute: '0',
   availableToMinute: '9999',
+  timezone: '',
 })
 
 function parseDriverForm(f: DriverFormData) {
   return {
-    ...f,
+    name: f.name,
+    initials: f.initials,
+    iracingId: f.iracingId,
     irating: parseFloat(f.irating) || 0,
-    minStintMinutes: parseFloat(f.minStintMinutes) || 0,
-    maxStintMinutes: parseFloat(f.maxStintMinutes) || 0,
-    maxConsecutiveStints: parseFloat(f.maxConsecutiveStints) || 3,
-    availableFromMinute: parseFloat(f.availableFromMinute) || 0,
-    availableToMinute: parseFloat(f.availableToMinute) || 9999,
+    color: f.color,
+    minStintMinutes: Math.round((parseFloat(f.minStintHours) || 0) * 60),
+    maxStintMinutes: Math.round((parseFloat(f.maxStintHours) || 0) * 60),
     rainPreference: f.rainPreference,
     nightPreference: f.nightPreference,
     prefersRaceStart: f.prefersRaceStart,
+    maxConsecutiveStints: parseFloat(f.maxConsecutiveStints) || 3,
+    availableFromMinute: parseFloat(f.availableFromMinute) || 0,
+    availableToMinute: parseFloat(f.availableToMinute) || 9999,
+    timezone: f.timezone,
     notes: '',
   }
 }
 
 function driverToForm(driver: Driver): DriverFormData {
+  const minH = driver.minStintMinutes / 60
+  const maxH = driver.maxStintMinutes / 60
   return {
     name: driver.name,
     initials: driver.initials,
     iracingId: driver.iracingId,
     irating: String(driver.irating),
     color: driver.color,
-    minStintMinutes: String(driver.minStintMinutes),
-    maxStintMinutes: String(driver.maxStintMinutes),
+    minStintHours: String(Number.isInteger(minH) ? minH : minH.toFixed(2).replace(/\.?0+$/, '')),
+    maxStintHours: String(Number.isInteger(maxH) ? maxH : maxH.toFixed(2).replace(/\.?0+$/, '')),
     rainPreference: driver.rainPreference ?? 'neutral',
     nightPreference: driver.nightPreference ?? 'neutral',
     prefersRaceStart: driver.prefersRaceStart ?? false,
     maxConsecutiveStints: String(driver.maxConsecutiveStints ?? 3),
     availableFromMinute: String(driver.availableFromMinute ?? 0),
     availableToMinute: String(driver.availableToMinute ?? 9999),
+    timezone: driver.timezone ?? '',
   }
 }
 
@@ -626,7 +675,8 @@ export default function RaceSetup() {
                     <th className="text-left pb-2 pr-3">Name</th>
                     <th className="text-left pb-2 pr-3">Initials</th>
                     <th className="text-right pb-2 pr-3">iRating</th>
-                    <th className="text-right pb-2 pr-3">Min/Max (min)</th>
+                    <th className="text-right pb-2 pr-3">Stint (h)</th>
+                    <th className="text-left pb-2 pr-3">Timezone</th>
                     <th className="text-left pb-2 pr-3">Prefs</th>
                     <th className="text-right pb-2">Actions</th>
                   </tr>
@@ -682,31 +732,40 @@ export default function RaceSetup() {
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          <div className="flex gap-1 justify-end">
+                          <div className="flex gap-1 justify-end items-center">
                             <input
                               type="number"
-                              value={editForm.minStintMinutes}
+                              min={0}
+                              step={0.25}
+                              value={editForm.minStintHours}
                               onChange={(e) =>
-                                setEditForm((f) => ({
-                                  ...f,
-                                  minStintMinutes: e.target.value,
-                                }))
+                                setEditForm((f) => ({ ...f, minStintHours: e.target.value }))
                               }
                               className="w-14 bg-gray-800 border border-gray-600 text-white rounded px-1 py-1 text-xs focus:outline-none focus:border-blue-500 text-right"
                             />
-                            <span className="text-gray-500 self-center">/</span>
+                            <span className="text-gray-500">–</span>
                             <input
                               type="number"
-                              value={editForm.maxStintMinutes}
+                              min={0.25}
+                              step={0.25}
+                              value={editForm.maxStintHours}
                               onChange={(e) =>
-                                setEditForm((f) => ({
-                                  ...f,
-                                  maxStintMinutes: e.target.value,
-                                }))
+                                setEditForm((f) => ({ ...f, maxStintHours: e.target.value }))
                               }
                               className="w-14 bg-gray-800 border border-gray-600 text-white rounded px-1 py-1 text-xs focus:outline-none focus:border-blue-500 text-right"
                             />
                           </div>
+                        </td>
+                        <td className="py-2 pr-3">
+                          <select
+                            value={editForm.timezone}
+                            onChange={(e) => setEditForm((f) => ({ ...f, timezone: e.target.value }))}
+                            className="w-36 bg-gray-800 border border-gray-600 text-white rounded px-1 py-1 text-xs focus:outline-none focus:border-blue-500"
+                          >
+                            {TIMEZONES.map((t) => (
+                              <option key={t.tz} value={t.tz}>{t.label}</option>
+                            ))}
+                          </select>
                         </td>
                         <td className="py-2 pr-3">
                           <div className="flex flex-wrap gap-1">
@@ -743,8 +802,20 @@ export default function RaceSetup() {
                         <td className="py-2 pr-3 text-right text-gray-200 font-mono">
                           {driver.irating.toLocaleString()}
                         </td>
-                        <td className="py-2 pr-3 text-right text-gray-400">
-                          {driver.minStintMinutes}/{driver.maxStintMinutes}
+                        <td className="py-2 pr-3 text-right text-gray-400 font-mono text-xs">
+                          {(driver.minStintMinutes / 60).toFixed(driver.minStintMinutes % 60 === 0 ? 0 : 1)}h
+                          {' – '}
+                          {(driver.maxStintMinutes / 60).toFixed(driver.maxStintMinutes % 60 === 0 ? 0 : 1)}h
+                        </td>
+                        <td className="py-2 pr-3">
+                          {driver.timezone ? (
+                            <div className="flex flex-col">
+                              <span className="text-gray-300 text-xs">{tzLabel(driver.timezone)}</span>
+                              <span className="text-gray-500 text-xs font-mono">{getDriverLocalTime(driver.timezone)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-600 text-xs">—</span>
+                          )}
                         </td>
                         <td className="py-2 pr-3">
                           <div className="flex flex-wrap gap-1">
@@ -874,29 +945,43 @@ export default function RaceSetup() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Min Stint (min)</label>
+                  <label className="block text-xs text-gray-500 mb-1">Min Stint (hrs)</label>
                   <input
                     type="number"
                     min={0}
-                    value={driverForm.minStintMinutes}
+                    step={0.25}
+                    value={driverForm.minStintHours}
                     onChange={(e) =>
-                      setDriverForm((f) => ({ ...f, minStintMinutes: e.target.value }))
+                      setDriverForm((f) => ({ ...f, minStintHours: e.target.value }))
                     }
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Max Stint (min)</label>
+                  <label className="block text-xs text-gray-500 mb-1">Max Stint (hrs)</label>
                   <input
                     type="number"
-                    min={1}
-                    value={driverForm.maxStintMinutes}
+                    min={0.25}
+                    step={0.25}
+                    value={driverForm.maxStintHours}
                     onChange={(e) =>
-                      setDriverForm((f) => ({ ...f, maxStintMinutes: e.target.value }))
+                      setDriverForm((f) => ({ ...f, maxStintHours: e.target.value }))
                     }
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Timezone</label>
+                <select
+                  value={driverForm.timezone}
+                  onChange={(e) => setDriverForm((f) => ({ ...f, timezone: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                >
+                  {TIMEZONES.map((t) => (
+                    <option key={t.tz} value={t.tz}>{t.label}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Advanced Preferences Section */}

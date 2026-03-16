@@ -96,6 +96,7 @@ const useRaceStore = create<RaceStore>()(
           maxConsecutiveStints: driverData.maxConsecutiveStints ?? 3,
           availableFromMinute: driverData.availableFromMinute ?? 0,
           availableToMinute: driverData.availableToMinute ?? 9999,
+          timezone: driverData.timezone ?? '',
           notes: driverData.notes ?? '',
         }
         set((state) => ({

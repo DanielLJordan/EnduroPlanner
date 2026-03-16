@@ -28,6 +28,7 @@ export interface Driver {
   availableFromMinute: number
   availableToMinute: number
   notes: string
+  timezone: string            // IANA timezone e.g. "America/New_York" (empty = not set)
   telemetry?: DriverTelemetry
 }
 

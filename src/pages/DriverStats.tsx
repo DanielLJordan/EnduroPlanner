@@ -230,7 +230,7 @@ export default function DriverStats() {
                   <span className="text-gray-300 font-mono">{remainingStints.length}</span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {driver.minStintMinutes}–{driver.maxStintMinutes} min
+                  {(driver.minStintMinutes / 60).toFixed(driver.minStintMinutes % 60 === 0 ? 0 : 1)}h – {(driver.maxStintMinutes / 60).toFixed(driver.maxStintMinutes % 60 === 0 ? 0 : 1)}h
                 </div>
               </div>
 

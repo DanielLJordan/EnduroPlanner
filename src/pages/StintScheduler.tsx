@@ -388,13 +388,13 @@ export default function StintScheduler() {
       if (stint.plannedDurationMinutes > driver.maxStintMinutes) {
         warnings.push({
           type: 'max_stint',
-          message: `${driver.name}: Stint at ${minutesToHHMM(stint.plannedStartMinute)} exceeds max stint time (${driver.maxStintMinutes} min)`,
+          message: `${driver.name}: Stint at ${minutesToHHMM(stint.plannedStartMinute)} exceeds max stint time (${(driver.maxStintMinutes / 60).toFixed(1)}h)`,
         })
       }
       if (stint.plannedDurationMinutes < driver.minStintMinutes) {
         warnings.push({
           type: 'min_stint',
-          message: `${driver.name}: Stint at ${minutesToHHMM(stint.plannedStartMinute)} is below min stint time (${driver.minStintMinutes} min)`,
+          message: `${driver.name}: Stint at ${minutesToHHMM(stint.plannedStartMinute)} is below min stint time (${(driver.minStintMinutes / 60).toFixed(1)}h)`,
         })
       }
       if (
