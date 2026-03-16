@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import useRaceStore from '../store/useRaceStore'
 import { IRACING_SPECIAL_EVENTS, searchEvents } from '../data/iracingEvents'
 import type { IRacingEvent } from '../data/iracingEvents'
+import { getEventCarClasses } from '../data/carClasses'
 
 function useCountdown(targetDateStr: string) {
   const [remaining, setRemaining] = useState<number | null>(null)
@@ -99,6 +100,7 @@ export default function Home() {
   const [eventQuery, setEventQuery] = useState('')
   const [showEventDropdown, setShowEventDropdown] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<IRacingEvent | null>(null)
+  const [selectedClass, setSelectedClass] = useState<string | null>(null)
   const [useCustom, setUseCustom] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -117,6 +119,7 @@ export default function Home() {
 
   function selectEvent(event: IRacingEvent) {
     setSelectedEvent(event)
+    setSelectedClass(null)
     setEventQuery(event.name)
     setShowEventDropdown(false)
     setForm((f) => ({
@@ -124,11 +127,13 @@ export default function Home() {
       name: event.name,
       track: event.track,
       durationHours: String(event.durationHours),
+      carName: '',
     }))
   }
 
   function clearEvent() {
     setSelectedEvent(null)
+    setSelectedClass(null)
     setEventQuery('')
     setForm(defaultForm)
   }
@@ -358,31 +363,68 @@ export default function Home() {
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-sm text-gray-400 mb-1">Car Name</label>
-                <input
-                  type="text"
-                  value={form.carName}
-                  onChange={(e) => setForm((f) => ({ ...f, carName: e.target.value }))}
-                  placeholder={
-                    selectedEvent
-                      ? selectedEvent.carClasses[0] ?? 'e.g. Porsche 911 GT3 R'
-                      : 'e.g. Porsche 911 GT3 R'
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
-                />
-                {selectedEvent && selectedEvent.carClasses.length > 1 && (
-                  <div className="flex gap-1 mt-1.5 flex-wrap">
-                    <span className="text-xs text-gray-600">Common cars:</span>
-                    {selectedEvent.carClasses.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setForm((f) => ({ ...f, carName: c }))}
-                        className="text-xs text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-600 rounded px-1.5 py-0.5 transition-colors"
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
+                <label className="block text-sm text-gray-400 mb-1">Car</label>
+
+                {/* Class selector — shown when an event is selected */}
+                {selectedEvent && (() => {
+                  const classes = getEventCarClasses(selectedEvent.carClasses)
+                  const activeClass = classes.find((c) => c.id === selectedClass)
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {classes.map((cls) => (
+                          <button
+                            key={cls.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedClass(cls.id)
+                              setForm((f) => ({ ...f, carName: '' }))
+                            }}
+                            className={`px-2.5 py-1 rounded text-xs font-medium transition-colors border ${
+                              selectedClass === cls.id
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+                            }`}
+                          >
+                            {cls.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {activeClass && (
+                        <select
+                          value={form.carName}
+                          onChange={(e) => setForm((f) => ({ ...f, carName: e.target.value }))}
+                          className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 focus:outline-none focus:border-blue-500 text-sm"
+                        >
+                          <option value="">Select a car…</option>
+                          {activeClass.cars.map((car) => (
+                            <option key={car} value={car}>{car}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* Manual override */}
+                      <input
+                        type="text"
+                        value={form.carName}
+                        onChange={(e) => setForm((f) => ({ ...f, carName: e.target.value }))}
+                        placeholder="Or type a car name…"
+                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 focus:outline-none focus:border-blue-500 text-sm placeholder-gray-600"
+                      />
+                    </div>
+                  )
+                })()}
+
+                {/* No event selected — plain text input */}
+                {!selectedEvent && (
+                  <input
+                    type="text"
+                    value={form.carName}
+                    onChange={(e) => setForm((f) => ({ ...f, carName: e.target.value }))}
+                    placeholder="e.g. Porsche 911 GT3 R"
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
+                  />
                 )}
               </div>
             </div>
