@@ -1,4 +1,6 @@
 import { NavLink, useParams, Link } from 'react-router-dom'
+import useRaceStore from '../store/useRaceStore'
+import { formatLapTime } from '../utils/time'
 
 interface NavItem {
   label: string
@@ -45,6 +47,8 @@ const DebriefIcon = () => (
 
 export default function NavBar() {
   const { raceId } = useParams<{ raceId: string }>()
+  const { getActiveRace } = useRaceStore()
+  const race = getActiveRace()
 
   const navItems: NavItem[] = [
     { label: 'Schedule', icon: <ScheduleIcon />, path: `/race/${raceId}/scheduler` },
@@ -83,6 +87,46 @@ export default function NavBar() {
       ))}
 
       <div className="flex-1" />
+
+      {/* Quick car stats */}
+      {race && race.car.tankSizeLiters > 0 && (
+        <div className="mx-1 mb-2 rounded-lg bg-gray-800/60 border border-gray-700/50 p-2.5 space-y-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Car</p>
+          {race.car.name && (
+            <p className="text-xs text-gray-300 truncate font-medium">{race.car.name}</p>
+          )}
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+            <div>
+              <p className="text-gray-600 text-xs leading-none mb-0.5">Tank</p>
+              <p className="text-white text-xs font-mono font-semibold">{race.car.tankSizeLiters} L</p>
+            </div>
+            <div>
+              <p className="text-gray-600 text-xs leading-none mb-0.5">Burn</p>
+              <p className="text-white text-xs font-mono font-semibold">{race.car.burnRatePerLap} L/lap</p>
+            </div>
+            {race.car.avgLapTimeSeconds > 0 && (
+              <div>
+                <p className="text-gray-600 text-xs leading-none mb-0.5">Lap</p>
+                <p className="text-white text-xs font-mono font-semibold">{formatLapTime(race.car.avgLapTimeSeconds)}</p>
+              </div>
+            )}
+            {race.car.burnRatePerLap > 0 && race.car.avgLapTimeSeconds > 0 && (
+              <div>
+                <p className="text-gray-600 text-xs leading-none mb-0.5">Window</p>
+                <p className="text-blue-300 text-xs font-mono font-semibold">
+                  {(() => {
+                    const laps = Math.floor((race.car.tankSizeLiters * 0.9) / race.car.burnRatePerLap)
+                    const mins = Math.round(laps * race.car.avgLapTimeSeconds / 60)
+                    const h = Math.floor(mins / 60)
+                    const m = mins % 60
+                    return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
+                  })()}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="border-t border-gray-800 pt-2 mt-1">
         <Link

@@ -5,6 +5,7 @@ import useRaceStore from '../store/useRaceStore'
 import StintEditModal from '../components/StintEditModal'
 import type { Stint, RaceEvent, Driver } from '../types'
 import { minutesToHHMM } from '../utils/time'
+import { exportScheduleAsImage } from '../utils/exportImage'
 
 const PX_PER_HOUR = 120
 const ROW_HEIGHT = 68
@@ -334,29 +335,9 @@ export default function StintScheduler() {
 
   const handleExportSchedule = () => {
     if (!race) return
-    const sorted = [...race.stints].sort((a, b) => a.plannedStartMinute - b.plannedStartMinute)
-    const lines: string[] = [
-      `STINT SCHEDULE — ${race.name}`,
-      `Track: ${race.track} | Duration: ${race.durationHours}h | Drivers: ${race.drivers.length}`,
-      '═'.repeat(60),
-      `${'#'.padEnd(4)}${'Driver'.padEnd(18)}${'Start'.padEnd(8)}${'End'.padEnd(8)}${'Duration'.padEnd(10)}Status`,
-      '─'.repeat(60),
-    ]
-    sorted.forEach((stint, i) => {
-      const driver = race.drivers.find((d) => d.id === stint.driverId)
-      const end = stint.plannedStartMinute + stint.plannedDurationMinutes
-      lines.push(
-        `${String(i + 1).padEnd(4)}${(driver?.name ?? 'Unknown').padEnd(18)}${minutesToHHMM(stint.plannedStartMinute).padEnd(8)}${minutesToHHMM(end).padEnd(8)}${String(stint.plannedDurationMinutes + ' min').padEnd(10)}${stint.status}`
-      )
-    })
-    lines.push('─'.repeat(60))
-    lines.push(`Total stints: ${sorted.length} | Generated: ${new Date().toLocaleString()}`)
-
-    const text = lines.join('\n')
-    navigator.clipboard.writeText(text).then(() => {
-      setExportCopied(true)
-      setTimeout(() => setExportCopied(false), 2000)
-    })
+    exportScheduleAsImage(race)
+    setExportCopied(true)
+    setTimeout(() => setExportCopied(false), 2000)
   }
 
   const handleSaveStint = (stintData: Omit<Stint, 'id'> | Stint) => {
@@ -516,12 +497,13 @@ export default function StintScheduler() {
             onClick={handleExportSchedule}
             disabled={race.stints.length === 0}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-gray-300 hover:text-white rounded-md text-sm font-medium transition-colors"
-            title="Copy schedule to clipboard"
+            title="Export schedule as PNG image"
           >
             <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-              <path d="M4 1.5H3a2 2 0 00-2 2V14a2 2 0 002 2h10a2 2 0 002-2V3.5a2 2 0 00-2-2h-1v1h1a1 1 0 011 1V14a1 1 0 01-1 1H3a1 1 0 01-1-1V3.5a1 1 0 011-1h1v-1z"/><path d="M9.5 1a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-3a.5.5 0 01-.5-.5v-1a.5.5 0 01.5-.5h3zm-3-1A1.5 1.5 0 005 1.5v1A1.5 1.5 0 006.5 4h3A1.5 1.5 0 0011 2.5v-1A1.5 1.5 0 009.5 0h-3z"/>
+              <path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/>
+              <path d="M7.646 11.854a.5.5 0 00.708 0l3-3a.5.5 0 00-.708-.708L8.5 10.293V1.5a.5.5 0 00-1 0v8.793L5.354 8.146a.5.5 0 10-.708.708l3 3z"/>
             </svg>
-            {exportCopied ? 'Copied!' : 'Export'}
+            {exportCopied ? 'Downloading…' : 'Export PNG'}
           </button>
           <button
             onClick={() => {

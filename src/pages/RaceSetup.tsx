@@ -238,10 +238,10 @@ export default function RaceSetup() {
 
   const [carForm, setCarForm] = useState({
     name: race?.car.name ?? '',
-    tankSizeLiters: race?.car.tankSizeLiters ?? 70,
-    burnRatePerLap: race?.car.burnRatePerLap ?? 3.0,
+    tankSizeLiters: String(race?.car.tankSizeLiters ?? 70),
+    burnRatePerLap: String(race?.car.burnRatePerLap ?? 3.0),
     avgLapTimeSeconds: race?.car.avgLapTimeSeconds ?? 90,
-    tireStintLimitLaps: race?.car.tireStintLimitLaps ?? 40,
+    tireStintLimitLaps: String(race?.car.tireStintLimitLaps ?? 40),
   })
   const [lapTimeInputStr, setLapTimeInputStr] = useState(() =>
     formatLapTime(race?.car.avgLapTimeSeconds ?? 90)
@@ -363,7 +363,7 @@ export default function RaceSetup() {
     setCarForm((f) => ({
       ...f,
       avgLapTimeSeconds: telemetryImport.avgLapTime,
-      ...(telemetryImport.avgFuelPerLap > 0 ? { burnRatePerLap: telemetryImport.avgFuelPerLap } : {}),
+      ...(telemetryImport.avgFuelPerLap > 0 ? { burnRatePerLap: String(telemetryImport.avgFuelPerLap) } : {}),
       ...(telemetryImport.trackName && !f.name ? { name: telemetryImport.carName ?? f.name } : {}),
     }))
     setLapTimeInputStr(formatLapTime(telemetryImport.avgLapTime))
@@ -396,7 +396,7 @@ export default function RaceSetup() {
     setCarForm((f) => ({
       ...f,
       avgLapTimeSeconds: rounded,
-      ...(avgFuel > 0 ? { burnRatePerLap: Math.round(avgFuel * 1000) / 1000 } : {}),
+      ...(avgFuel > 0 ? { burnRatePerLap: String(Math.round(avgFuel * 1000) / 1000) } : {}),
     }))
     setLapTimeInputStr(formatLapTime(rounded))
   }
@@ -435,7 +435,12 @@ export default function RaceSetup() {
 
   const handleSaveCar = () => {
     if (!raceId) return
-    updateCar(raceId, carForm)
+    updateCar(raceId, {
+      ...carForm,
+      tankSizeLiters: parseFloat(carForm.tankSizeLiters) || 0,
+      burnRatePerLap: parseFloat(carForm.burnRatePerLap) || 0,
+      tireStintLimitLaps: parseInt(carForm.tireStintLimitLaps) || 0,
+    })
     setCarSaved(true)
     setTimeout(() => setCarSaved(false), 2000)
   }
@@ -494,12 +499,11 @@ export default function RaceSetup() {
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Tank Size (L)</label>
                 <input
-                  type="number"
-                  min={1}
-                  step={0.5}
+                  type="text"
+                  inputMode="decimal"
                   value={carForm.tankSizeLiters}
                   onChange={(e) =>
-                    setCarForm((f) => ({ ...f, tankSizeLiters: Number(e.target.value) }))
+                    setCarForm((f) => ({ ...f, tankSizeLiters: e.target.value }))
                   }
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
                 />
@@ -507,12 +511,11 @@ export default function RaceSetup() {
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Burn Rate (L/lap)</label>
                 <input
-                  type="number"
-                  min={0.1}
-                  step={0.1}
+                  type="text"
+                  inputMode="decimal"
                   value={carForm.burnRatePerLap}
                   onChange={(e) =>
-                    setCarForm((f) => ({ ...f, burnRatePerLap: Number(e.target.value) }))
+                    setCarForm((f) => ({ ...f, burnRatePerLap: e.target.value }))
                   }
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
                 />
@@ -538,11 +541,11 @@ export default function RaceSetup() {
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Tire Stint Limit (laps)</label>
                 <input
-                  type="number"
-                  min={1}
+                  type="text"
+                  inputMode="numeric"
                   value={carForm.tireStintLimitLaps}
                   onChange={(e) =>
-                    setCarForm((f) => ({ ...f, tireStintLimitLaps: Number(e.target.value) }))
+                    setCarForm((f) => ({ ...f, tireStintLimitLaps: e.target.value }))
                   }
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
                 />

@@ -22,7 +22,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 flex flex-col bg-gray-900 border-r border-gray-800/80">
+      <aside className="w-52 flex-shrink-0 flex flex-col bg-gray-900 border-r border-gray-800/80">
         {/* App brand */}
         <div className="px-4 pt-4 pb-3 border-b border-gray-800">
           <div className="flex items-center gap-2 mb-3">
