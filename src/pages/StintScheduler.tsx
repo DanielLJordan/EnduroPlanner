@@ -295,6 +295,26 @@ export default function StintScheduler() {
   const [activeVariantTab, setActiveVariantTab] = useState<0 | 1 | 2>(0)
   const [showFuelWindows, setShowFuelWindows] = useState(true)
   const timelineRef = useRef<HTMLDivElement>(null)
+  const driverRowsRef = useRef<HTMLDivElement>(null)
+
+  // Drag-and-drop state
+  interface DragState {
+    stintId: string
+    origDriverId: string
+    currentDriverId: string
+    origStartMinute: number
+    currentStartMinute: number
+    startClientX: number
+    startClientY: number
+    origDriverIdx: number
+  }
+  const dragRef = useRef<DragState | null>(null)
+  const [dragDisplay, setDragDisplay] = useState<{
+    stintId: string
+    currentStartMinute: number
+    currentDriverId: string
+  } | null>(null)
+  const hasDraggedRef = useRef(false)
 
   if (!race) {
     return <div className="p-8 text-gray-400">Race not found.</div>
@@ -373,6 +393,98 @@ export default function StintScheduler() {
     setShowStrategyPanel(false)
     setGeneratedVariants(null)
   }
+
+  // ── Drag-and-drop handlers ────────────────────────────────────────────────────
+
+  const handleStintPointerDown = (e: React.PointerEvent, stint: Stint, driverIdx: number) => {
+    e.preventDefault()
+    driverRowsRef.current?.setPointerCapture(e.pointerId)
+    hasDraggedRef.current = false
+    const state: DragState = {
+      stintId: stint.id,
+      origDriverId: stint.driverId,
+      currentDriverId: stint.driverId,
+      origStartMinute: stint.plannedStartMinute,
+      currentStartMinute: stint.plannedStartMinute,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      origDriverIdx: driverIdx,
+    }
+    dragRef.current = state
+    setDragDisplay({ stintId: stint.id, currentStartMinute: stint.plannedStartMinute, currentDriverId: stint.driverId })
+  }
+
+  const handleTimelinePointerMove = (e: React.PointerEvent) => {
+    const ds = dragRef.current
+    if (!ds) return
+
+    const dx = e.clientX - ds.startClientX
+    const dy = e.clientY - ds.startClientY
+
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      hasDraggedRef.current = true
+    }
+
+    const stint = race.stints.find((s) => s.id === ds.stintId)
+    if (!stint) return
+
+    const deltaMinutes = (dx / timelineWidth) * totalMinutes
+    const newStartMinute = Math.max(
+      0,
+      Math.min(totalMinutes - stint.plannedDurationMinutes, Math.round(ds.origStartMinute + deltaMinutes))
+    )
+
+    const rowDelta = Math.round(dy / ROW_HEIGHT)
+    const newDriverIdx = Math.max(0, Math.min(race.drivers.length - 1, ds.origDriverIdx + rowDelta))
+    const newDriverId = race.drivers[newDriverIdx]?.id ?? ds.origDriverId
+
+    dragRef.current = { ...ds, currentStartMinute: newStartMinute, currentDriverId: newDriverId }
+    setDragDisplay({ stintId: ds.stintId, currentStartMinute: newStartMinute, currentDriverId: newDriverId })
+  }
+
+  const handleTimelinePointerUp = () => {
+    const ds = dragRef.current
+    if (!ds) return
+
+    if (!hasDraggedRef.current) {
+      const stint = race.stints.find((s) => s.id === ds.stintId)
+      if (stint) handleStintClick(stint)
+    } else if (raceId) {
+      const stint = race.stints.find((s) => s.id === ds.stintId)
+      if (
+        stint &&
+        (ds.currentStartMinute !== ds.origStartMinute || ds.currentDriverId !== ds.origDriverId)
+      ) {
+        updateStint(raceId, ds.stintId, {
+          ...stint,
+          plannedStartMinute: ds.currentStartMinute,
+          driverId: ds.currentDriverId,
+        })
+      }
+    }
+
+    dragRef.current = null
+    setDragDisplay(null)
+  }
+
+  const handleDuplicateStint = (e: React.MouseEvent, stint: Stint) => {
+    e.stopPropagation()
+    if (!raceId) return
+    const { id: _id, ...rest } = stint
+    addStint(raceId, {
+      ...rest,
+      plannedStartMinute: stint.plannedStartMinute + stint.plannedDurationMinutes,
+    } as Omit<Stint, 'id'>)
+  }
+
+  // Effective stints reflecting current drag preview
+  const effectiveStints = dragDisplay
+    ? race.stints.map((s) =>
+        s.id === dragDisplay.stintId
+          ? { ...s, plannedStartMinute: dragDisplay.currentStartMinute, driverId: dragDisplay.currentDriverId }
+          : s
+      )
+    : race.stints
 
   // ── Validation ────────────────────────────────────────────────────────────────
   const warnings: ValidationWarning[] = []
@@ -827,8 +939,14 @@ export default function StintScheduler() {
               )}
 
               {/* Driver rows */}
-              {race.drivers.map((driver) => {
-                const driverStints = race.stints.filter((s) => s.driverId === driver.id)
+              <div
+                ref={driverRowsRef}
+                style={{ cursor: dragDisplay ? 'grabbing' : undefined, touchAction: 'none' }}
+                onPointerMove={handleTimelinePointerMove}
+                onPointerUp={handleTimelinePointerUp}
+              >
+              {race.drivers.map((driver, driverIdx) => {
+                const driverStints = effectiveStints.filter((s) => s.driverId === driver.id)
                 const allocatedMinutes = driverStints.reduce(
                   (sum, s) => sum + s.plannedDurationMinutes,
                   0
@@ -966,40 +1084,59 @@ export default function StintScheduler() {
                         const width = (stint.plannedDurationMinutes / totalMinutes) * timelineWidth
                         const isActive = stint.status === 'active'
                         const isCompleted = stint.status === 'completed'
+                        const isDragging = dragDisplay?.stintId === stint.id
+                        // Find the actual driver color (may differ when dragged to another row)
+                        const stintDriver = race.drivers.find((d) => d.id === stint.driverId) ?? driver
                         return (
                           <div
                             key={stint.id}
-                            onClick={() => handleStintClick(stint)}
+                            onPointerDown={(e) => handleStintPointerDown(e, race.stints.find(s => s.id === stint.id) ?? stint, driverIdx)}
                             style={{
                               position: 'absolute',
                               left,
                               width: Math.max(width, 4),
                               top: 8,
                               bottom: 8,
-                              backgroundColor: driver.color,
-                              opacity: isCompleted ? 0.5 : 1,
-                              border: isActive ? '2px solid white' : '1px solid rgba(255,255,255,0.2)',
-                              cursor: 'pointer',
+                              backgroundColor: stintDriver.color,
+                              opacity: isCompleted ? 0.5 : isDragging ? 0.8 : 1,
+                              border: isDragging
+                                ? '2px dashed rgba(255,255,255,0.7)'
+                                : isActive
+                                ? '2px solid white'
+                                : '1px solid rgba(255,255,255,0.2)',
+                              cursor: isDragging ? 'grabbing' : 'grab',
                               borderRadius: 4,
-                              overflow: 'hidden',
+                              overflow: 'visible',
                               display: 'flex',
                               alignItems: 'center',
                               paddingLeft: 4,
                               gap: 4,
-                              zIndex: 2,
+                              zIndex: isDragging ? 10 : 2,
+                              userSelect: 'none',
                             }}
-                            title={`${driver.name} — ${stint.plannedDurationMinutes} min`}
+                            className="group"
+                            title={`${stintDriver.name} — ${stint.plannedDurationMinutes} min`}
                           >
                             {width > 40 && (
-                              <span className="text-white text-xs font-semibold whitespace-nowrap overflow-hidden">
-                                {driver.initials}
+                              <span className="text-white text-xs font-semibold whitespace-nowrap overflow-hidden select-none">
+                                {stintDriver.initials}
                               </span>
                             )}
                             {width > 70 && (
-                              <span className="text-white/80 text-xs whitespace-nowrap">
+                              <span className="text-white/80 text-xs whitespace-nowrap select-none">
                                 {stint.plannedDurationMinutes}m
                               </span>
                             )}
+                            {/* Duplicate button */}
+                            <button
+                              className="absolute opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded bg-black/50 hover:bg-black/70 text-white/90 text-xs leading-none"
+                              style={{ top: -1, right: -1, width: 16, height: 16, fontSize: 11 }}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={(e) => handleDuplicateStint(e, race.stints.find(s => s.id === stint.id) ?? stint)}
+                              title="Duplicate stint"
+                            >
+                              ⧉
+                            </button>
                           </div>
                         )
                       })}
@@ -1007,6 +1144,7 @@ export default function StintScheduler() {
                   </div>
                 )
               })}
+              </div>
 
               {/* "Now" indicator */}
               {race.raceState.isRunning && elapsedMinutes > 0 && (
