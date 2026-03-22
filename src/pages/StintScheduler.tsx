@@ -429,10 +429,27 @@ export default function StintScheduler() {
     if (!stint) return
 
     const deltaMinutes = (dx / timelineWidth) * totalMinutes
-    const newStartMinute = Math.max(
+    const rawStart = Math.max(
       0,
-      Math.min(totalMinutes - stint.plannedDurationMinutes, Math.round(ds.origStartMinute + deltaMinutes))
+      Math.min(totalMinutes - stint.plannedDurationMinutes, ds.origStartMinute + deltaMinutes)
     )
+
+    // Snap to start/end of other stints (within ~8px threshold)
+    const snapThresholdMinutes = (8 / timelineWidth) * totalMinutes
+    const snapPoints = race.stints
+      .filter((s) => s.id !== ds.stintId)
+      .flatMap((s) => [s.plannedStartMinute, s.plannedStartMinute + s.plannedDurationMinutes])
+    // Also snap the trailing edge of the dragged stint to snap points
+    const stintEnd = rawStart + stint.plannedDurationMinutes
+    let snappedStart = rawStart
+    let bestDist = snapThresholdMinutes
+    for (const pt of snapPoints) {
+      const distHead = Math.abs(rawStart - pt)
+      if (distHead < bestDist) { bestDist = distHead; snappedStart = pt }
+      const distTail = Math.abs(stintEnd - pt)
+      if (distTail < bestDist) { bestDist = distTail; snappedStart = pt - stint.plannedDurationMinutes }
+    }
+    const newStartMinute = Math.max(0, Math.min(totalMinutes - stint.plannedDurationMinutes, Math.round(snappedStart)))
 
     const rowDelta = Math.round(dy / ROW_HEIGHT)
     const newDriverIdx = Math.max(0, Math.min(race.drivers.length - 1, ds.origDriverIdx + rowDelta))
