@@ -300,10 +300,13 @@ export default function StintScheduler() {
   // Drag-and-drop state
   interface DragState {
     stintId: string
+    mode: 'move' | 'resize-right'
     origDriverId: string
     currentDriverId: string
     origStartMinute: number
     currentStartMinute: number
+    origDurationMinutes: number
+    currentDurationMinutes: number
     startClientX: number
     startClientY: number
     origDriverIdx: number
@@ -313,6 +316,7 @@ export default function StintScheduler() {
     stintId: string
     currentStartMinute: number
     currentDriverId: string
+    currentDurationMinutes: number
   } | null>(null)
   const hasDraggedRef = useRef(false)
 
@@ -402,16 +406,41 @@ export default function StintScheduler() {
     hasDraggedRef.current = false
     const state: DragState = {
       stintId: stint.id,
+      mode: 'move',
       origDriverId: stint.driverId,
       currentDriverId: stint.driverId,
       origStartMinute: stint.plannedStartMinute,
       currentStartMinute: stint.plannedStartMinute,
+      origDurationMinutes: stint.plannedDurationMinutes,
+      currentDurationMinutes: stint.plannedDurationMinutes,
       startClientX: e.clientX,
       startClientY: e.clientY,
       origDriverIdx: driverIdx,
     }
     dragRef.current = state
-    setDragDisplay({ stintId: stint.id, currentStartMinute: stint.plannedStartMinute, currentDriverId: stint.driverId })
+    setDragDisplay({ stintId: stint.id, currentStartMinute: stint.plannedStartMinute, currentDriverId: stint.driverId, currentDurationMinutes: stint.plannedDurationMinutes })
+  }
+
+  const handleResizePointerDown = (e: React.PointerEvent, stint: Stint, driverIdx: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    driverRowsRef.current?.setPointerCapture(e.pointerId)
+    hasDraggedRef.current = false
+    const state: DragState = {
+      stintId: stint.id,
+      mode: 'resize-right',
+      origDriverId: stint.driverId,
+      currentDriverId: stint.driverId,
+      origStartMinute: stint.plannedStartMinute,
+      currentStartMinute: stint.plannedStartMinute,
+      origDurationMinutes: stint.plannedDurationMinutes,
+      currentDurationMinutes: stint.plannedDurationMinutes,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      origDriverIdx: driverIdx,
+    }
+    dragRef.current = state
+    setDragDisplay({ stintId: stint.id, currentStartMinute: stint.plannedStartMinute, currentDriverId: stint.driverId, currentDurationMinutes: stint.plannedDurationMinutes })
   }
 
   const handleTimelinePointerMove = (e: React.PointerEvent) => {
@@ -421,7 +450,7 @@ export default function StintScheduler() {
     const dx = e.clientX - ds.startClientX
     const dy = e.clientY - ds.startClientY
 
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
       hasDraggedRef.current = true
     }
 
@@ -429,34 +458,44 @@ export default function StintScheduler() {
     if (!stint) return
 
     const deltaMinutes = (dx / timelineWidth) * totalMinutes
-    const rawStart = Math.max(
-      0,
-      Math.min(totalMinutes - stint.plannedDurationMinutes, ds.origStartMinute + deltaMinutes)
-    )
-
-    // Snap to start/end of other stints (within ~8px threshold)
     const snapThresholdMinutes = (8 / timelineWidth) * totalMinutes
     const snapPoints = race.stints
       .filter((s) => s.id !== ds.stintId)
       .flatMap((s) => [s.plannedStartMinute, s.plannedStartMinute + s.plannedDurationMinutes])
-    // Also snap the trailing edge of the dragged stint to snap points
-    const stintEnd = rawStart + stint.plannedDurationMinutes
-    let snappedStart = rawStart
-    let bestDist = snapThresholdMinutes
-    for (const pt of snapPoints) {
-      const distHead = Math.abs(rawStart - pt)
-      if (distHead < bestDist) { bestDist = distHead; snappedStart = pt }
-      const distTail = Math.abs(stintEnd - pt)
-      if (distTail < bestDist) { bestDist = distTail; snappedStart = pt - stint.plannedDurationMinutes }
+
+    if (ds.mode === 'resize-right') {
+      const rawDuration = Math.max(1, ds.origDurationMinutes + deltaMinutes)
+      const maxDuration = totalMinutes - ds.origStartMinute
+      // Snap the trailing edge
+      const rawEnd = ds.origStartMinute + rawDuration
+      let snappedEnd = rawEnd
+      let bestDist = snapThresholdMinutes
+      for (const pt of snapPoints) {
+        const d = Math.abs(rawEnd - pt)
+        if (d < bestDist) { bestDist = d; snappedEnd = pt }
+      }
+      const newDuration = Math.max(1, Math.min(maxDuration, Math.round(snappedEnd - ds.origStartMinute)))
+      dragRef.current = { ...ds, currentDurationMinutes: newDuration }
+      setDragDisplay({ stintId: ds.stintId, currentStartMinute: ds.origStartMinute, currentDriverId: ds.origDriverId, currentDurationMinutes: newDuration })
+    } else {
+      const rawStart = Math.max(0, Math.min(totalMinutes - ds.origDurationMinutes, ds.origStartMinute + deltaMinutes))
+      // Snap head and tail to other stint boundaries
+      const stintEnd = rawStart + ds.origDurationMinutes
+      let snappedStart = rawStart
+      let bestDist = snapThresholdMinutes
+      for (const pt of snapPoints) {
+        const distHead = Math.abs(rawStart - pt)
+        if (distHead < bestDist) { bestDist = distHead; snappedStart = pt }
+        const distTail = Math.abs(stintEnd - pt)
+        if (distTail < bestDist) { bestDist = distTail; snappedStart = pt - ds.origDurationMinutes }
+      }
+      const newStartMinute = Math.max(0, Math.min(totalMinutes - ds.origDurationMinutes, Math.round(snappedStart)))
+      const rowDelta = Math.round(dy / ROW_HEIGHT)
+      const newDriverIdx = Math.max(0, Math.min(race.drivers.length - 1, ds.origDriverIdx + rowDelta))
+      const newDriverId = race.drivers[newDriverIdx]?.id ?? ds.origDriverId
+      dragRef.current = { ...ds, currentStartMinute: newStartMinute, currentDriverId: newDriverId }
+      setDragDisplay({ stintId: ds.stintId, currentStartMinute: newStartMinute, currentDriverId: newDriverId, currentDurationMinutes: ds.origDurationMinutes })
     }
-    const newStartMinute = Math.max(0, Math.min(totalMinutes - stint.plannedDurationMinutes, Math.round(snappedStart)))
-
-    const rowDelta = Math.round(dy / ROW_HEIGHT)
-    const newDriverIdx = Math.max(0, Math.min(race.drivers.length - 1, ds.origDriverIdx + rowDelta))
-    const newDriverId = race.drivers[newDriverIdx]?.id ?? ds.origDriverId
-
-    dragRef.current = { ...ds, currentStartMinute: newStartMinute, currentDriverId: newDriverId }
-    setDragDisplay({ stintId: ds.stintId, currentStartMinute: newStartMinute, currentDriverId: newDriverId })
   }
 
   const handleTimelinePointerUp = () => {
@@ -468,15 +507,12 @@ export default function StintScheduler() {
       if (stint) handleStintClick(stint)
     } else if (raceId) {
       const stint = race.stints.find((s) => s.id === ds.stintId)
-      if (
-        stint &&
-        (ds.currentStartMinute !== ds.origStartMinute || ds.currentDriverId !== ds.origDriverId)
-      ) {
-        updateStint(raceId, ds.stintId, {
-          ...stint,
-          plannedStartMinute: ds.currentStartMinute,
-          driverId: ds.currentDriverId,
-        })
+      if (stint) {
+        if (ds.mode === 'resize-right' && ds.currentDurationMinutes !== ds.origDurationMinutes) {
+          updateStint(raceId, ds.stintId, { ...stint, plannedDurationMinutes: ds.currentDurationMinutes })
+        } else if (ds.mode === 'move' && (ds.currentStartMinute !== ds.origStartMinute || ds.currentDriverId !== ds.origDriverId)) {
+          updateStint(raceId, ds.stintId, { ...stint, plannedStartMinute: ds.currentStartMinute, driverId: ds.currentDriverId })
+        }
       }
     }
 
@@ -494,11 +530,16 @@ export default function StintScheduler() {
     } as Omit<Stint, 'id'>)
   }
 
-  // Effective stints reflecting current drag preview
+  // Effective stints reflecting current drag/resize preview
   const effectiveStints = dragDisplay
     ? race.stints.map((s) =>
         s.id === dragDisplay.stintId
-          ? { ...s, plannedStartMinute: dragDisplay.currentStartMinute, driverId: dragDisplay.currentDriverId }
+          ? {
+              ...s,
+              plannedStartMinute: dragDisplay.currentStartMinute,
+              driverId: dragDisplay.currentDriverId,
+              plannedDurationMinutes: dragDisplay.currentDurationMinutes,
+            }
           : s
       )
     : race.stints
@@ -858,7 +899,7 @@ export default function StintScheduler() {
 
       {/* ── Timeline ─────────────────────────────────────────────────────────── */}
       <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-medium text-gray-400">Timeline</h2>
           <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
             <input
@@ -870,6 +911,10 @@ export default function StintScheduler() {
             Show Fuel Windows
           </label>
         </div>
+        {/* Interaction hint */}
+        <p className="text-xs text-gray-600 mb-3 select-none">
+          Drag to move · Drag right edge to resize · Drag up/down to reassign driver · Click to edit · Hover for duplicate
+        </p>
 
         {race.drivers.length === 0 ? (
           <div className="text-center py-10 text-gray-500 text-sm">
@@ -1101,59 +1146,93 @@ export default function StintScheduler() {
                         const width = (stint.plannedDurationMinutes / totalMinutes) * timelineWidth
                         const isActive = stint.status === 'active'
                         const isCompleted = stint.status === 'completed'
-                        const isDragging = dragDisplay?.stintId === stint.id
-                        // Find the actual driver color (may differ when dragged to another row)
+                        const isInteracting = dragDisplay?.stintId === stint.id
+                        const isResizing = isInteracting && dragRef.current?.mode === 'resize-right'
                         const stintDriver = race.drivers.find((d) => d.id === stint.driverId) ?? driver
+                        const origStint = race.stints.find((s) => s.id === stint.id) ?? stint
+                        const endMinute = stint.plannedStartMinute + stint.plannedDurationMinutes
                         return (
                           <div
                             key={stint.id}
-                            onPointerDown={(e) => handleStintPointerDown(e, race.stints.find(s => s.id === stint.id) ?? stint, driverIdx)}
+                            onPointerDown={(e) => handleStintPointerDown(e, origStint, driverIdx)}
                             style={{
                               position: 'absolute',
                               left,
-                              width: Math.max(width, 4),
-                              top: 8,
-                              bottom: 8,
+                              width: Math.max(width, 6),
+                              top: 6,
+                              bottom: 6,
                               backgroundColor: stintDriver.color,
-                              opacity: isCompleted ? 0.5 : isDragging ? 0.8 : 1,
-                              border: isDragging
+                              opacity: isCompleted ? 0.45 : isInteracting ? 0.85 : 1,
+                              border: isResizing
+                                ? '2px solid rgba(255,255,255,0.9)'
+                                : isInteracting
                                 ? '2px dashed rgba(255,255,255,0.7)'
                                 : isActive
                                 ? '2px solid white'
-                                : '1px solid rgba(255,255,255,0.2)',
-                              cursor: isDragging ? 'grabbing' : 'grab',
-                              borderRadius: 4,
+                                : '1px solid rgba(255,255,255,0.15)',
+                              cursor: isInteracting ? (isResizing ? 'ew-resize' : 'grabbing') : 'grab',
+                              borderRadius: 5,
                               overflow: 'visible',
                               display: 'flex',
                               alignItems: 'center',
-                              paddingLeft: 4,
+                              paddingLeft: 6,
+                              paddingRight: 14,
                               gap: 4,
-                              zIndex: isDragging ? 10 : 2,
+                              zIndex: isInteracting ? 10 : 2,
                               userSelect: 'none',
+                              boxShadow: isInteracting ? '0 4px 12px rgba(0,0,0,0.5)' : '0 1px 3px rgba(0,0,0,0.3)',
                             }}
                             className="group"
-                            title={`${stintDriver.name} — ${stint.plannedDurationMinutes} min`}
                           >
-                            {width > 40 && (
-                              <span className="text-white text-xs font-semibold whitespace-nowrap overflow-hidden select-none">
+                            {/* Content */}
+                            {width > 28 && (
+                              <span className="text-white text-xs font-bold whitespace-nowrap overflow-hidden select-none drop-shadow">
                                 {stintDriver.initials}
                               </span>
                             )}
-                            {width > 70 && (
-                              <span className="text-white/80 text-xs whitespace-nowrap select-none">
-                                {stint.plannedDurationMinutes}m
+                            {width > 72 && (
+                              <span className="text-white/75 text-xs whitespace-nowrap select-none">
+                                {minutesToHHMM(stint.plannedStartMinute)}
                               </span>
                             )}
+                            {width > 120 && (
+                              <span className="text-white/55 text-xs whitespace-nowrap select-none">
+                                → {minutesToHHMM(endMinute)}
+                              </span>
+                            )}
+
+                            {/* Live drag tooltip */}
+                            {isInteracting && (
+                              <div
+                                className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-gray-900 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none"
+                                style={{ zIndex: 20 }}
+                              >
+                                {minutesToHHMM(stint.plannedStartMinute)} → {minutesToHHMM(endMinute)}
+                                <span className="text-gray-400 ml-1">({stint.plannedDurationMinutes}m)</span>
+                              </div>
+                            )}
+
                             {/* Duplicate button */}
                             <button
-                              className="absolute opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded bg-black/50 hover:bg-black/70 text-white/90 text-xs leading-none"
-                              style={{ top: -1, right: -1, width: 16, height: 16, fontSize: 11 }}
+                              className="absolute opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-sm bg-black/60 hover:bg-white/20 text-white text-xs leading-none font-bold"
+                              style={{ top: 2, right: 16, width: 14, height: 14, fontSize: 10 }}
                               onPointerDown={(e) => e.stopPropagation()}
-                              onClick={(e) => handleDuplicateStint(e, race.stints.find(s => s.id === stint.id) ?? stint)}
+                              onClick={(e) => handleDuplicateStint(e, origStint)}
                               title="Duplicate stint"
                             >
-                              ⧉
+                              +
                             </button>
+
+                            {/* Resize handle (right edge) */}
+                            <div
+                              className="absolute top-0 bottom-0 right-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{ width: 12, cursor: 'ew-resize', borderRadius: '0 5px 5px 0', background: 'rgba(0,0,0,0.25)' }}
+                              onPointerDown={(e) => handleResizePointerDown(e, origStint, driverIdx)}
+                            >
+                              <div className="flex flex-col gap-0.5 pointer-events-none">
+                                <div className="w-0.5 h-2.5 rounded-full bg-white/70" />
+                              </div>
+                            </div>
                           </div>
                         )
                       })}
