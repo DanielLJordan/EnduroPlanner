@@ -1,7 +1,35 @@
-import { SignedIn, SignedOut, SignIn } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignIn, SignUp } from '@clerk/clerk-react'
+import { useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 
+const clerkAppearance = {
+  variables: {
+    colorPrimary: '#3b82f6',
+    colorBackground: '#111827',
+    colorInputBackground: '#1f2937',
+    colorInputText: '#f1f5f9',
+    colorText: '#f1f5f9',
+    colorTextSecondary: '#94a3b8',
+    colorNeutral: '#374151',
+    borderRadius: '0.75rem',
+  },
+  elements: {
+    card: 'bg-gray-900 border border-gray-800 shadow-2xl',
+    headerTitle: 'text-white',
+    headerSubtitle: 'text-gray-400',
+    socialButtonsBlockButton: 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700',
+    dividerLine: 'bg-gray-700',
+    dividerText: 'text-gray-500',
+    formFieldLabel: 'text-gray-400',
+    formFieldInput: 'bg-gray-800 border-gray-700 text-white',
+    footerActionLink: 'text-blue-400 hover:text-blue-300',
+  },
+}
+
 export default function LoginGate({ children }: { children: ReactNode }) {
+  const location = useLocation()
+  const isSignUp = location.pathname === '/sign-up'
+
   return (
     <>
       <SignedIn>{children}</SignedIn>
@@ -31,31 +59,19 @@ export default function LoginGate({ children }: { children: ReactNode }) {
               </div>
             </div>
 
-            <SignIn
-              appearance={{
-                variables: {
-                  colorPrimary: '#3b82f6',
-                  colorBackground: '#111827',
-                  colorInputBackground: '#1f2937',
-                  colorInputText: '#f1f5f9',
-                  colorText: '#f1f5f9',
-                  colorTextSecondary: '#94a3b8',
-                  colorNeutral: '#374151',
-                  borderRadius: '0.75rem',
-                },
-                elements: {
-                  card: 'bg-gray-900 border border-gray-800 shadow-2xl',
-                  headerTitle: 'text-white',
-                  headerSubtitle: 'text-gray-400',
-                  socialButtonsBlockButton: 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700',
-                  dividerLine: 'bg-gray-700',
-                  dividerText: 'text-gray-500',
-                  formFieldLabel: 'text-gray-400',
-                  formFieldInput: 'bg-gray-800 border-gray-700 text-white',
-                  footerActionLink: 'text-blue-400 hover:text-blue-300',
-                },
-              }}
-            />
+            {isSignUp ? (
+              <SignUp
+                signInUrl="/"
+                afterSignUpUrl="/"
+                appearance={clerkAppearance}
+              />
+            ) : (
+              <SignIn
+                signUpUrl="/sign-up"
+                afterSignInUrl="/"
+                appearance={clerkAppearance}
+              />
+            )}
           </div>
         </div>
       </SignedOut>

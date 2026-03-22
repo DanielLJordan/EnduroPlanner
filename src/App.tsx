@@ -13,6 +13,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/sign-up" element={<Home />} />
       <Route path="/race/:raceId" element={<Layout />}>
         <Route path="setup" element={<RaceSetup />} />
         <Route path="scheduler" element={<StintScheduler />} />

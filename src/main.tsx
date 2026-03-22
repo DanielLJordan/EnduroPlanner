@@ -34,7 +34,11 @@ if (missingVars.length > 0) {
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <ClerkProvider publishableKey={clerkKey!}>
+      <ClerkProvider
+        publishableKey={clerkKey!}
+        afterSignInUrl="/"
+        afterSignUpUrl="/"
+      >
         <ConvexProvider client={convex}>
           <BrowserRouter>
             <LoginGate>
