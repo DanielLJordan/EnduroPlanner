@@ -7,6 +7,7 @@ import PitStopLog from './pages/PitStopLog'
 import FuelPlanner from './pages/FuelPlanner'
 import DriverStats from './pages/DriverStats'
 import Debrief from './pages/Debrief'
+import SOFCalculator from './pages/SOFCalculator'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="fuel" element={<FuelPlanner />} />
         <Route path="drivers" element={<DriverStats />} />
         <Route path="debrief" element={<Debrief />} />
+        <Route path="sof" element={<SOFCalculator />} />
       </Route>
     </Routes>
   )
