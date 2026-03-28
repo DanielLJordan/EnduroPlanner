@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import useRaceStore from '../store/useRaceStore'
 import {
@@ -90,10 +90,37 @@ export default function FuelPlanner() {
   const { races } = useRaceStore()
   const race = races.find((r) => r.id === raceId)
 
-  const [tankSizeStr, setTankSizeStr] = useState(String(race?.car.tankSizeLiters ?? 70))
-  const [burnRateStr, setBurnRateStr] = useState(String(race?.car.burnRatePerLap ?? 3.0))
-  const [lapTimeStr, setLapTimeStr] = useState(() => formatLapTime(race?.car.avgLapTimeSeconds ?? 90))
-  const [safetyMarginStr, setSafetyMarginStr] = useState('5')
+  const storageKey = `ep-fuel-${raceId}`
+  const readSaved = (): Record<string, string> | null => {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  }
+  const saved = readSaved()
+
+  const [tankSizeStr, setTankSizeStr] = useState(saved?.tankSizeStr ?? String(race?.car.tankSizeLiters ?? 70))
+  const [burnRateStr, setBurnRateStr] = useState(saved?.burnRateStr ?? String(race?.car.burnRatePerLap ?? 3.0))
+  const [lapTimeStr, setLapTimeStr] = useState(() => saved?.lapTimeStr ?? formatLapTime(race?.car.avgLapTimeSeconds ?? 90))
+  const [safetyMarginStr, setSafetyMarginStr] = useState(saved?.safetyMarginStr ?? '5')
+
+  // Persist slider values whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ tankSizeStr, burnRateStr, lapTimeStr, safetyMarginStr }))
+    } catch {}
+  }, [storageKey, tankSizeStr, burnRateStr, lapTimeStr, safetyMarginStr])
+
+  // When Convex loads the race for the first time and there's no saved state, sync from race.car
+  const didInitFromRace = useRef(false)
+  useEffect(() => {
+    if (!race || didInitFromRace.current) return
+    didInitFromRace.current = true
+    if (readSaved()) return // already have persisted values
+    setTankSizeStr(String(race.car.tankSizeLiters))
+    setBurnRateStr(String(race.car.burnRatePerLap))
+    setLapTimeStr(formatLapTime(race.car.avgLapTimeSeconds))
+  }, [race]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const tankSize = parseFloat(tankSizeStr) || 0
   const burnRate = parseFloat(burnRateStr) || 0

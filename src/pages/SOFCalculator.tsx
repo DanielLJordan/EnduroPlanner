@@ -246,6 +246,7 @@ export default function SOFCalculator() {
               }
               className="bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
             >
+              <option value="all">All years</option>
               {years.map((y) => (
                 <option key={y} value={y}>
                   {y}

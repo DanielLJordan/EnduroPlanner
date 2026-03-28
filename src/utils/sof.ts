@@ -46,13 +46,13 @@ export function predictSplit(
 
 /** Describe the SOF tier label used by iRacing community. */
 export function sofTierLabel(sof: number): { label: string; color: string } {
-  if (sof >= 5000) return { label: 'World Class', color: 'text-purple-400' }
-  if (sof >= 4500) return { label: 'Elite', color: 'text-yellow-400' }
-  if (sof >= 4000) return { label: 'Pro', color: 'text-orange-400' }
-  if (sof >= 3500) return { label: 'Advanced', color: 'text-blue-400' }
+  if (sof >= 9000) return { label: 'World Class', color: 'text-purple-400' }
+  if (sof >= 7500) return { label: 'Elite', color: 'text-yellow-400' }
+  if (sof >= 6000) return { label: 'Pro', color: 'text-orange-400' }
+  if (sof >= 4500) return { label: 'Advanced', color: 'text-blue-400' }
   if (sof >= 3000) return { label: 'Intermediate', color: 'text-cyan-400' }
-  if (sof >= 2500) return { label: 'Developing', color: 'text-green-400' }
-  if (sof >= 2000) return { label: 'Rookie', color: 'text-lime-400' }
+  if (sof >= 2000) return { label: 'Developing', color: 'text-green-400' }
+  if (sof >= 1500) return { label: 'Rookie', color: 'text-lime-400' }
   return { label: 'Novice', color: 'text-gray-400' }
 }
 
